@@ -1,4 +1,9 @@
 ﻿<Solution>
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
   <Project Path="PhotonRealtime.csproj" />
   <Project Path="PhotonUnityNetworking.Editor.csproj" />
   <Project Path="PhotonUnityNetworking.csproj" />
@@ -10,4 +15,8 @@
   <Project Path="PhotonChat.csproj" />
   <Project Path="PhotonUnityNetworking.Utilities.PhotonPlayer.Editor.csproj" />
   <Project Path="PhotonUnityNetworking.Utilities.Culling.Editor.csproj" />
+<<<<<<< HEAD
+=======
+>>>>>>> origin/layout_main_lobby
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
 </Solution>

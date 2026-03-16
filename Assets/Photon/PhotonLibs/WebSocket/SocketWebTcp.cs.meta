@@ -6,6 +6,7 @@ MonoImporter:
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
+<<<<<<< HEAD
 AssetOrigin:
   serializedVersion: 1
   productId: 119922
@@ -13,3 +14,5 @@ AssetOrigin:
   packageVersion: 2.52
   assetPath: Assets/Photon/PhotonLibs/WebSocket/SocketWebTcp.cs
   uploadId: 817708
+=======
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5

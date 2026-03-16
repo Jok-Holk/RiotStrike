@@ -3,6 +3,7 @@ Photon C# Client Library - Changelog
 www.photonengine.com  -  Join our Discord Server: https://dashboard.photonengine.com/account/profile
 
 
+<<<<<<< HEAD
 Version 4.1.8.17 (10. November 2025 - rev8151)
     Updated: Error handling and logging in PhotonPeer.InitDatagramEncryption(). It now disconnects the client with a respective status callback (in case there is no Datagram Encryption implementation, etc.).
     Changed: Replaced a NullReferenceException in InitDatagramEncryption() with a more suitable disconnect via StatusCode.EncryptionFailedToEstablish.
@@ -18,6 +19,8 @@ Version 4.1.8.17 (10. November 2025 - rev8151)
     Changed: QuickResendAttempts are now in the range of 1 - 4 and default to 2.
     Updated: Reference for QuickResendAttempts and SentCountAllowance.
 
+=======
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
 Version 4.1.8.16 (31. July 2025 - rev8016)
     Added: SupportClass overload for CalculateCrc() with offset.
     Changed: CalculateCrc() without offset is now obsolete.

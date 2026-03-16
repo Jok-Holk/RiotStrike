@@ -42,7 +42,11 @@ PluginImporter:
       settings:
         CPU: ARMv7
   - first:
+<<<<<<< HEAD
       Any: 
+=======
+      Any:
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
     second:
       enabled: 1
       settings: {}
@@ -114,7 +118,11 @@ PluginImporter:
       settings:
         CPU: AnyCPU
         DontProcess: false
+<<<<<<< HEAD
         PlaceholderPath: 
+=======
+        PlaceholderPath:
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
         SDK: AnySDK
         ScriptingBackend: Il2Cpp
   - first:
@@ -123,8 +131,13 @@ PluginImporter:
       enabled: 1
       settings:
         AddToEmbeddedBinaries: false
+<<<<<<< HEAD
         CompileFlags: 
         FrameworkDependencies: 
+=======
+        CompileFlags:
+        FrameworkDependencies:
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
   - first:
       PS4: PS4
     second:
@@ -160,6 +173,7 @@ PluginImporter:
     second:
       enabled: 1
       settings: {}
+<<<<<<< HEAD
   userData: 
   assetBundleName: 
   assetBundleVariant: 
@@ -170,3 +184,8 @@ AssetOrigin:
   packageVersion: 2.52
   assetPath: Assets/Photon/PhotonLibs/netstandard2.0/Photon3Unity3D.dll
   uploadId: 817708
+=======
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5

@@ -1,5 +1,13 @@
 fileFormatVersion: 2
+<<<<<<< HEAD
 guid: 9fc0d4010bbf28b4594072e72b8655ab
+=======
+<<<<<<<< HEAD:Assets/_Project/Scenes/Game.unity.meta
+guid: 34bc2e25270e7d4479d7f7660dbdb48f
+========
+guid: 9fc0d4010bbf28b4594072e72b8655ab
+>>>>>>>> origin/layout_main_lobby:Assets/_Scenes/1_PhotonRoom.unity.meta
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
 DefaultImporter:
   externalObjects: {}
   userData: 

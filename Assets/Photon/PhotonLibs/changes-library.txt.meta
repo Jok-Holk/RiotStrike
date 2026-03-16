@@ -1,6 +1,7 @@
 fileFormatVersion: 2
 guid: d8040d310df77714a90a561261bfb2cb
 DefaultImporter:
+<<<<<<< HEAD
   userData: 
   assetBundleName: 
   assetBundleVariant: 
@@ -11,3 +12,8 @@ AssetOrigin:
   packageVersion: 2.52
   assetPath: Assets/Photon/PhotonLibs/changes-library.txt
   uploadId: 817708
+=======
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5

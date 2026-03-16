@@ -2,6 +2,7 @@ fileFormatVersion: 2
 guid: 3e262c2b04eaa8440987b50a91e86674
 DefaultImporter:
   userData: 
+<<<<<<< HEAD
 AssetOrigin:
   serializedVersion: 1
   productId: 119922
@@ -9,3 +10,5 @@ AssetOrigin:
   packageVersion: 2.52
   assetPath: Assets/Photon/PhotonLibs/WebSocket/websocket-sharp.README
   uploadId: 817708
+=======
+>>>>>>> e646bc11a14e264eb07149d7ad2bca354eabe7f5
