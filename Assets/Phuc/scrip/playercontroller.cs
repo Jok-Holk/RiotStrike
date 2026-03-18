@@ -10,7 +10,7 @@ public class PlayerMovement : MonoBehaviour
     public float jumpForce = 8f;
     public float gravity = -9.81f;
 
-    public float jumpCooldown = 1.5f; // thời gian hồi 1.5 giây
+    public float jumpCooldown = 1.5f;
     private float lastJumpTime;
 
     Vector3 velocity;
@@ -35,13 +35,16 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = transform.right * x + transform.forward * z;
         controller.Move(move * currentSpeed * Time.deltaTime);
 
-        // Animation Speed
+        // Animation parameters
         if (animator != null)
         {
-            animator.SetFloat("Speed", move.magnitude * currentSpeed);
+            float moveSpeed = move.magnitude * currentSpeed;
+            animator.SetFloat("Speed", moveSpeed);
+            animator.SetFloat("Forward", z);
+            animator.SetFloat("Strafe", x);
         }
 
-        // Nhảy (không phân biệt ground, chỉ cooldown)
+        // Nhảy với cooldown
         if (Input.GetKeyDown(KeyCode.Space) && Time.time >= lastJumpTime + jumpCooldown)
         {
             velocity.y = jumpForce;
@@ -49,18 +52,13 @@ public class PlayerMovement : MonoBehaviour
 
             if (animator != null)
             {
-                animator.SetTrigger("Jump");
+                animator.ResetTrigger("Jump"); // reset trước để tránh lỗi spam
+                animator.SetTrigger("Jump");   // kích hoạt animation nhảy
             }
         }
 
         // Gravity
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
-
-        // Xoay nhân vật theo hướng di chuyển
-        if (move != Vector3.zero)
-        {
-            transform.forward = move;
-        }
     }
 }
