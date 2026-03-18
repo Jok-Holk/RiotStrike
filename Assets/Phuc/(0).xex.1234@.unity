@@ -667,7 +667,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
   controller: {fileID: 1487056297}
-  animator: {fileID: 0}
+  animator: {fileID: 1487056302}
   speed: 6
   slowSpeed: 3
   jumpForce: 8
@@ -697,6 +697,11 @@ BoxCollider:
 --- !u!4 &1487056301 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: b96c6d9651e3a98478c4a5c1e0b25b56, type: 3}
+  m_PrefabInstance: {fileID: 943516201}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &1487056302 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: b96c6d9651e3a98478c4a5c1e0b25b56, type: 3}
   m_PrefabInstance: {fileID: 943516201}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1832024376
