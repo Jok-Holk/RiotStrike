@@ -226,6 +226,7 @@ GameObject:
   - component: {fileID: 1749639607463685331}
   - component: {fileID: 8960682548703786262}
   - component: {fileID: 4852749657136686998}
+  - component: {fileID: 8446865927887139598}
   m_Layer: 0
   m_Name: PlayerPrefab
   m_TagString: Untagged
@@ -289,14 +290,36 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FPSController
   walkSpeed: 6
+  runSpeed: 7
   crouchSpeed: 3
   jumpForce: 8
   gravity: -20
+  standHeight: 2
+  crouchHeight: 1
+  crouchTransitionSpeed: 8
   groundCheck: {fileID: 7830389318022531091}
   groundDistance: 0.4
   groundMask:
     serializedVersion: 2
     m_Bits: 0
+--- !u!114 &8446865927887139598
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7326729773325157058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 4185355842
+  ObjectInterest: 1
+  Flags: 262145
+  NestedObjects: []
+  NetworkedBehaviours: []
+  ForceRemoteRenderTimeframe: 0
 --- !u!1001 &2324878685805200269
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -348,6 +371,14 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: b96c6d9651e3a98478c4a5c1e0b25b56, type: 3}
       propertyPath: m_Name
       value: Vanguard By T. Choonyung
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: b96c6d9651e3a98478c4a5c1e0b25b56, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 6364eec4bfaadeb498bdc3a5ab85875f, type: 2}
+    - target: {fileID: 5866666021909216657, guid: b96c6d9651e3a98478c4a5c1e0b25b56, type: 3}
+      propertyPath: m_WarningMessage
+      value: 
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
