@@ -33,22 +33,19 @@ public class LobbyUI : MonoBehaviour
 
         createButton.interactable = false;
         joinButton.interactable = false;
-    }
 
-    void OnEnable()
-    {
-        if (LobbyManager.instance == null) return;
         LobbyManager.instance.OnRoomListUpdated += RefreshRoomList;
         LobbyManager.instance.OnJoinFailed += OnJoinFailed;
+        LobbyManager.instance.OnConnected += OnConnectedSuccess;
     }
 
-    void OnDisable()
+    void OnDestroy()
     {
         if (LobbyManager.instance == null) return;
         LobbyManager.instance.OnRoomListUpdated -= RefreshRoomList;
         LobbyManager.instance.OnJoinFailed -= OnJoinFailed;
+        LobbyManager.instance.OnConnected -= OnConnectedSuccess;
     }
-
     void OnConnectClick()
     {
         string nick = nickNameInput.text.Trim();
@@ -57,7 +54,10 @@ public class LobbyUI : MonoBehaviour
         SetStatus("Connecting...");
         connectButton.interactable = false;
         LobbyManager.instance.Connect(nick);
+    }
 
+    void OnConnectedSuccess()
+    {
         createButton.interactable = true;
         joinButton.interactable = true;
         SetStatus("Connected. Ready to play.");
@@ -68,6 +68,8 @@ public class LobbyUI : MonoBehaviour
         string room = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(room)) return;
         SetStatus("Creating room: " + room);
+        createButton.interactable = false;
+        joinButton.interactable = false;
         LobbyManager.instance.CreateRoom(room);
     }
 
@@ -76,6 +78,8 @@ public class LobbyUI : MonoBehaviour
         string room = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(room)) return;
         SetStatus("Joining room: " + room);
+        createButton.interactable = false;
+        joinButton.interactable = false;
         LobbyManager.instance.JoinRoom(room);
     }
 
@@ -103,9 +107,10 @@ public class LobbyUI : MonoBehaviour
 
     void OnJoinFailed(string reason)
     {
-        SetStatus("Join failed: " + reason);
+        SetStatus("Failed: " + reason);
         createButton.interactable = true;
         joinButton.interactable = true;
+        connectButton.interactable = true;
     }
 
     void SetStatus(string msg)

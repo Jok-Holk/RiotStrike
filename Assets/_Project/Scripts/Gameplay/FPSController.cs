@@ -1,7 +1,8 @@
+﻿using Fusion;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
-public class FPSController : MonoBehaviour
+public class FPSController : NetworkBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float walkSpeed = 4f;
@@ -15,91 +16,179 @@ public class FPSController : MonoBehaviour
     [SerializeField] private float crouchHeight = 1f;
     [SerializeField] private float crouchTransitionSpeed = 8f;
 
-    [Header("Ground Check")]
-    [SerializeField] private Transform groundCheck;
-    [SerializeField] private float groundDistance = 0.4f;
-    [SerializeField] private LayerMask groundMask;
+    [Networked] public Vector3 NetworkedPosition { get; set; }
+    [Networked] public float NetworkedYaw { get; set; }
+    [Networked] private bool _isCrouching { get; set; }
 
-    private CharacterController _controller;
-    private Animator _animator;
     private Vector3 _velocity;
-    private bool _isGrounded;
-    private bool _isCrouching;
+    private CharacterController _cc;
+    private FPSCamera _fpsCamera;
     private float _targetHeight;
+    private bool _warped;
 
-    void Start()
+    public float LastForward { get; private set; }
+    public float LastStrafe { get; private set; }
+    public bool IsCrouching => _isCrouching;
+
+    public void InitSpawnPosition(Vector3 pos)
     {
-        _controller = GetComponent<CharacterController>();
-        _animator = GetComponentInChildren<Animator>();
+        if (_cc == null) _cc = GetComponent<CharacterController>();
+        _cc.enabled = false;
+        transform.position = pos;
+        _cc.enabled = true;
+        NetworkedPosition = pos;
+        NetworkedYaw = 0f;
+        _velocity = new Vector3(0f, -2f, 0f);
+    }
+
+    public override void Spawned()
+    {
+        _cc = GetComponent<CharacterController>();
+        _fpsCamera = GetComponentInChildren<FPSCamera>();
         _targetHeight = standHeight;
+        _warped = false;
+
+        if (_velocity == Vector3.zero)
+            _velocity = new Vector3(0f, -2f, 0f);
+
+        _fpsCamera?.Initialize(Object.HasInputAuthority);
+
+        if (Object.HasStateAuthority)
+        {
+            NetworkedPosition = transform.position;
+            NetworkedYaw = transform.eulerAngles.y;
+        }
+
+        _cc.enabled = Object.HasInputAuthority;
+
+        if (Object.HasInputAuthority)
+        {
+            var ip = FindFirstObjectByType<InputProvider>();
+            if (ip != null) ip.SetCamera(_fpsCamera);
+        }
+
+        if (FindFirstObjectByType<PlayerDebugLogger>() == null)
+            new GameObject("PlayerDebugLogger").AddComponent<PlayerDebugLogger>();
+        PlayerDebugLogger.Register(this);
+
+        Debug.Log($"[Spawned] InputAuth={Object.HasInputAuthority} StateAuth={Object.HasStateAuthority} Owner={Object.InputAuthority} pos={transform.position}");
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        PlayerDebugLogger.Unregister(this);
     }
 
     void Update()
     {
-        HandleGroundCheck();
-        HandleCrouch();
-        HandleMovement();
-        HandleJump();
-        ApplyGravity();
-    }
-
-    void HandleGroundCheck()
-    {
-        _isGrounded = Physics.CheckSphere(
-            groundCheck ? groundCheck.position : transform.position,
-            groundDistance,
-            groundMask
-        );
-        if (_isGrounded && _velocity.y < 0)
-            _velocity.y = -2f;
-    }
-
-    void HandleCrouch()
-    {
-        if (Input.GetKeyDown(KeyCode.LeftControl))
+        if (!_warped && Object.HasInputAuthority && !Object.HasStateAuthority)
         {
-            _isCrouching = !_isCrouching;
-            _targetHeight = _isCrouching ? crouchHeight : standHeight;
-            _animator?.SetBool("Crouch", _isCrouching);
+            if (NetworkedPosition != Vector3.zero)
+            {
+                _cc.enabled = false;
+                transform.position = NetworkedPosition;
+                _cc.enabled = true;
+                _velocity = new Vector3(0f, -2f, 0f);
+                _warped = true;
+                Debug.Log($"[Warp] {NetworkedPosition}");
+            }
         }
-        _controller.height = Mathf.Lerp(_controller.height, _targetHeight, Time.deltaTime * crouchTransitionSpeed);
     }
 
-    void HandleMovement()
+    bool IsGrounded() => _cc.isGrounded;
+
+    public override void FixedUpdateNetwork()
     {
-        float x = Input.GetAxis("Horizontal");
-        float z = Input.GetAxis("Vertical");
-        bool isRunning = Input.GetKey(KeyCode.LeftShift) && !_isCrouching && z > 0;
+        if (!Object.HasInputAuthority) return;
+        if (!GetInput(out NetworkInputData input)) return;
 
-        float speed = _isCrouching ? crouchSpeed : (isRunning ? runSpeed : walkSpeed);
-        Vector3 move = transform.right * x + transform.forward * z;
-        _controller.Move(move * speed * Time.deltaTime);
+        NetworkedYaw = input.Yaw;
+        transform.rotation = Quaternion.Euler(0f, NetworkedYaw, 0f);
 
-        if (_animator == null) return;
-        _animator.SetFloat("Speed", move.magnitude * speed);
-        _animator.SetFloat("Forward", z);
-        _animator.SetFloat("Strafe", x);
+        if (Runner.IsForward)
+        {
+            HandleCrouch(input);
+            HandleMovement(input);
+            HandleJump(input);
+            _fpsCamera?.ApplyInput(input, Runner.DeltaTime);
+        }
+
+        ApplyGravity();
+
+        LastForward = input.MoveDirection.y;
+        LastStrafe = input.MoveDirection.x;
+
+        if (Object.HasStateAuthority)
+            NetworkedPosition = transform.position;
+        else if (Runner.IsForward)
+            RPC_SyncTransform(transform.position, input.Yaw);
     }
 
-    void HandleJump()
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    private void RPC_SyncTransform(Vector3 pos, float yaw)
     {
-        if (!Input.GetKeyDown(KeyCode.Space) || !_isGrounded || _isCrouching) return;
-        _velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
-        _animator?.ResetTrigger("Jump");
-        _animator?.SetTrigger("Jump");
+        NetworkedPosition = pos;
+        NetworkedYaw = yaw;
+    }
+
+    public override void Render()
+    {
+        if (Object.HasInputAuthority)
+        {
+            _fpsCamera?.ApplyVisual();
+            return;
+        }
+
+        if (NetworkedPosition == Vector3.zero) return;
+
+        float dist = Vector3.Distance(transform.position, NetworkedPosition);
+        transform.position = dist > 3f
+            ? NetworkedPosition
+            : Vector3.Lerp(transform.position, NetworkedPosition, Time.deltaTime * 25f);
+
+        transform.rotation = Quaternion.Slerp(
+            transform.rotation,
+            Quaternion.Euler(0f, NetworkedYaw, 0f),
+            Time.deltaTime * 25f);
+    }
+
+    void HandleCrouch(NetworkInputData input)
+    {
+        if (input.Crouch != _isCrouching)
+        {
+            _isCrouching = input.Crouch;
+            _targetHeight = _isCrouching ? crouchHeight : standHeight;
+        }
+        _cc.height = Mathf.Lerp(_cc.height, _targetHeight, Runner.DeltaTime * crouchTransitionSpeed);
+    }
+
+    void HandleMovement(NetworkInputData input)
+    {
+        bool isSprinting = input.Sprint && !_isCrouching && input.MoveDirection.y > 0;
+        float speed = _isCrouching ? crouchSpeed : (isSprinting ? runSpeed : walkSpeed);
+        Vector2 dir = input.MoveDirection;
+        if (dir.magnitude > 1f) dir.Normalize();
+        Vector3 move = transform.right * dir.x + transform.forward * dir.y;
+        _cc.Move(move * speed * Runner.DeltaTime);
+    }
+
+    void HandleJump(NetworkInputData input)
+    {
+        if (IsGrounded() && _velocity.y < 0)
+            _velocity.y = -2f;
+        if (input.Jump && IsGrounded() && !_isCrouching)
+            _velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
     }
 
     void ApplyGravity()
     {
-        _velocity.y += gravity * Time.deltaTime;
-        _controller.Move(_velocity * Time.deltaTime);
+        _velocity.y += gravity * Runner.DeltaTime;
+        _cc.Move(_velocity * Runner.DeltaTime);
     }
 
-    public void TriggerHit() => _animator?.SetTrigger("Hit");
-    public void TriggerDeath() => _animator?.SetTrigger("Death");
-    public void TriggerFire() => _animator?.SetTrigger("Fire");
-    public void TriggerReload() => _animator?.SetTrigger("Reload");
-    public void SetWeaponType(int type) => _animator?.SetInteger("WeaponType", type);
-    public bool IsCrouching => _isCrouching;
-    public bool IsRunning => Input.GetKey(KeyCode.LeftShift) && !_isCrouching;
+    public void TriggerHit() => GetComponent<PlayerAnimatorController>()?.TriggerHit();
+    public void TriggerDeath() => GetComponent<PlayerAnimatorController>()?.TriggerDeath();
+    public void TriggerFire() => GetComponent<PlayerAnimatorController>()?.TriggerFire();
+    public void TriggerReload() => GetComponent<PlayerAnimatorController>()?.TriggerReload();
+    public void SetWeaponType(int type) => GetComponent<PlayerAnimatorController>()?.SetWeaponType(type);
 }
