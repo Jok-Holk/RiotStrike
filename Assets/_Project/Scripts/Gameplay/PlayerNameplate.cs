@@ -6,37 +6,47 @@ public class PlayerNameplate : NetworkBehaviour
 {
     [SerializeField] private GameObject nameplateRoot;
     [SerializeField] private TextMeshPro nameText;
-    [SerializeField] private Color teammateColor = Color.cyan;
+    [SerializeField] private Color teammateColor = Color.white;
     [SerializeField] private Color enemyColor = Color.red;
 
     private Transform _cameraTransform;
+    private Transform _headBone;
 
     public override void Spawned()
     {
-        // Ẩn nameplate của chính mình
         if (Object.HasInputAuthority)
         {
             nameplateRoot.SetActive(false);
             return;
         }
 
-        // Lấy camera local
         _cameraTransform = Camera.main?.transform;
 
-        UpdateNameplate();
+        // Lấy head bone để follow
+        var animator = GetComponentInChildren<Animator>();
+        if (animator != null)
+            _headBone = animator.GetBoneTransform(HumanBodyBones.Head);
+
+        nameplateRoot.SetActive(true);
     }
 
     public override void Render()
     {
-        if (!Object.HasInputAuthority && nameplateRoot.activeSelf)
-        {
-            // Billboard — luôn nhìn về phía camera
-            if (_cameraTransform != null)
-                nameplateRoot.transform.LookAt(
-                    nameplateRoot.transform.position + _cameraTransform.rotation * Vector3.forward,
-                    _cameraTransform.rotation * Vector3.up
-                );
-        }
+        if (Object.HasInputAuthority || !nameplateRoot.activeSelf) return;
+
+        // Follow head bone
+        if (_headBone != null)
+            nameplateRoot.transform.position = _headBone.position + Vector3.up * 0.3f;
+
+        // Billboard
+        if (_cameraTransform != null)
+            nameplateRoot.transform.LookAt(
+                nameplateRoot.transform.position + _cameraTransform.rotation * Vector3.forward,
+                _cameraTransform.rotation * Vector3.up
+            );
+
+        // Update mỗi frame vì NickName và Team có thể sync trễ
+        UpdateNameplate();
     }
 
     void UpdateNameplate()
@@ -46,21 +56,18 @@ public class PlayerNameplate : NetworkBehaviour
 
         nameText.text = networkPlayer.NickName.ToString();
 
-        // Tìm local player để so team
         foreach (var player in Runner.ActivePlayers)
         {
-            if (Runner.TryGetPlayerObject(player, out NetworkObject localObj))
-            {
-                if (localObj.HasInputAuthority)
-                {
-                    var localNetPlayer = localObj.GetComponent<NetworkPlayer>();
-                    if (localNetPlayer == null) break;
+            if (!Runner.TryGetPlayerObject(player, out NetworkObject localObj)) continue;
+            if (!localObj.HasInputAuthority) continue;
 
-                    bool isTeammate = localNetPlayer.Team == networkPlayer.Team;
-                    nameText.color = isTeammate ? teammateColor : enemyColor;
-                    break;
-                }
-            }
+            var localNetPlayer = localObj.GetComponent<NetworkPlayer>();
+            if (localNetPlayer == null) break;
+
+            nameText.color = localNetPlayer.Team == networkPlayer.Team
+                ? teammateColor
+                : enemyColor;
+            break;
         }
     }
 }

@@ -1,4 +1,5 @@
 using Fusion;
+using TMPro;
 using UnityEngine;
 
 public class NetworkPlayer : NetworkBehaviour
@@ -6,48 +7,105 @@ public class NetworkPlayer : NetworkBehaviour
     [Networked] public int Team { get; set; }
     [Networked] public NetworkString<_32> NickName { get; set; }
 
+    [Header("Team Materials")]
     [SerializeField] private Material teamAMat;
     [SerializeField] private Material teamBMat;
 
+    [Header("Nameplate")]
+    [SerializeField] private TextMeshProUGUI nameText;
+    [SerializeField] private Transform nameplateRoot;
+    [SerializeField] private Vector3 nameplateOffset = new Vector3(0, 0.3f, 0);
+
     private SkinnedMeshRenderer _meshRenderer;
+    private Animator _animator;
+    private Transform _headBone;
+    private int _lastTeam = -1;
+    private string _lastNickName = "";
 
     public override void Spawned()
     {
-        // Xóa NetworkTransform nếu còn
         var nt = GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = false;
 
         _meshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
+        _animator = GetComponentInChildren<Animator>();
 
-        Debug.Log($"Spawned — HasInputAuthority: {Object.HasInputAuthority}, HasStateAuthority: {Object.HasStateAuthority}");
+        if (_animator != null)
+            _headBone = _animator.GetBoneTransform(HumanBodyBones.Head);
 
         var cam = GetComponentInChildren<Camera>();
-        Debug.Log($"Camera found: {cam != null}, Camera enabled: {cam?.enabled}");
+        Debug.Log($"Spawned — HasInputAuthority: {Object.HasInputAuthority}, HasStateAuthority: {Object.HasStateAuthority}");
 
         if (!Object.HasInputAuthority)
         {
             if (cam) cam.enabled = false;
-            var audioListener = GetComponentInChildren<AudioListener>();
-            if (audioListener) audioListener.enabled = false;
+            var audio = GetComponentInChildren<AudioListener>();
+            if (audio) audio.enabled = false;
         }
+        else
+        {
+            // Ẩn mesh local player
+            foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>())
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        }
+
+        if (nameplateRoot != null)
+            nameplateRoot.gameObject.SetActive(!Object.HasInputAuthority);
 
         if (Object.HasStateAuthority)
-        {
             NickName = PlayerPrefs.GetString("NickName", "Player");
-        }
 
         ApplyTeamMaterial();
+        ApplyNickName();
     }
 
     void ApplyTeamMaterial()
     {
         if (_meshRenderer == null) return;
-        if (Team == 0 && teamAMat != null) _meshRenderer.material = teamAMat;
-        else if (Team == 1 && teamBMat != null) _meshRenderer.material = teamBMat;
+        if (Team == 0 && teamAMat != null)
+            _meshRenderer.material = teamAMat;
+        else if (Team == 1 && teamBMat != null)
+            _meshRenderer.material = teamBMat;
+    }
+
+    void ApplyNickName()
+    {
+        if (nameText == null) return;
+        nameText.text = NickName.ToString();
+
+        int localTeam = -1;
+        foreach (var p in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
+        {
+            if (p.Object.HasInputAuthority) { localTeam = p.Team; break; }
+        }
+
+        nameText.color = (localTeam == -1 || Team == localTeam)
+            ? Color.white : Color.red;
     }
 
     public override void Render()
     {
-        ApplyTeamMaterial();
+        if (Team != _lastTeam)
+        {
+            _lastTeam = Team;
+            ApplyTeamMaterial();
+            ApplyNickName();
+        }
+
+        string currentNick = NickName.ToString();
+        if (currentNick != _lastNickName)
+        {
+            _lastNickName = currentNick;
+            ApplyNickName();
+        }
+
+        if (nameplateRoot != null && _headBone != null && nameplateRoot.gameObject.activeSelf)
+        {
+            nameplateRoot.position = _headBone.position + nameplateOffset;
+            var cam = Camera.main;
+            if (cam != null)
+                nameplateRoot.rotation = Quaternion.LookRotation(
+                    nameplateRoot.position - cam.transform.position);
+        }
     }
 }

@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6611971068941797150}
+  - component: {fileID: 1366217791880582502}
   m_Layer: 0
   m_Name: CameraHolder
   m_TagString: Untagged
@@ -32,6 +33,19 @@ Transform:
   - {fileID: 9024752302037689257}
   m_Father: {fileID: 1749639607463685331}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1366217791880582502
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8592951192776046}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8097453de6a3e5f4da0d4d52eb5cb34a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraHeadAttacher
+  offset: {x: 0, y: 0.05, z: 0.08}
 --- !u!1 &1714193948777000972
 GameObject:
   m_ObjectHideFlags: 0
@@ -213,7 +227,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 235fb886bcd613944b3d9e8b33e6b9dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FPSCamera
-  mouseSensitivity: 100
+  sensitivity: 1
 --- !u!1 &7326729773325157058
 GameObject:
   m_ObjectHideFlags: 0
@@ -274,11 +288,6 @@ MonoBehaviour:
   standHeight: 2
   crouchHeight: 1
   crouchTransitionSpeed: 8
-  groundCheck: {fileID: 7830389318022531091}
-  groundDistance: 0.4
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 8
   _NetworkedPosition: {x: 0, y: 0, z: 0}
   _NetworkedYaw: 0
 --- !u!114 &2774881941388902325
@@ -300,6 +309,9 @@ MonoBehaviour:
       Data: 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
   teamAMat: {fileID: 2100000, guid: d79136b1f3bdd384dbd5abca646fa87e, type: 2}
   teamBMat: {fileID: 2100000, guid: afb6fec81de295246abab3e1e1d2b12a, type: 2}
+  nameText: {fileID: 0}
+  nameplateRoot: {fileID: 5198621152106598777}
+  nameplateOffset: {x: 0, y: 0.3, z: 0}
 --- !u!114 &3124678828904849514
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -314,7 +326,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerNameplate
   nameplateRoot: {fileID: 8545330505057864332}
   nameText: {fileID: 4656095128662605116}
-  teammateColor: {r: 0, g: 1, b: 1, a: 1}
+  teammateColor: {r: 1, g: 1, b: 1, a: 1}
   enemyColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &3854428236658237857
 MonoBehaviour:
@@ -373,6 +385,7 @@ MonoBehaviour:
   - {fileID: 4852749657136686998}
   - {fileID: 2774881941388902325}
   - {fileID: 3124678828904849514}
+  - {fileID: 1366217791880582502}
   - {fileID: 1136636263616704636}
   ForceRemoteRenderTimeframe: 0
 --- !u!1 &8545330505057864332
@@ -508,8 +521,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 2
-  m_fontSizeBase: 2
+  m_fontSize: 1
+  m_fontSizeBase: 1
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18

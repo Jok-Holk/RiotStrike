@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿// AnimationClipRenamer.cs
+using UnityEngine;
 using UnityEditor;
 using System.IO;
 
@@ -7,8 +8,7 @@ public class AnimationClipRenamer : EditorWindow
     [MenuItem("RiotStrike/Rename Animation Clips")]
     public static void RenameAllClips()
     {
-        string[] folders = new string[]
-        {
+        string[] folders = {
             "Assets/_Project/Animations/Rifle",
             "Assets/_Project/Animations/Pistol",
             "Assets/_Project/Animations/Pistol/In-Place",
@@ -24,12 +24,12 @@ public class AnimationClipRenamer : EditorWindow
             foreach (string guid in guids)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (!path.EndsWith(".fbx") && !path.EndsWith(".FBX")) continue;
+                if (!path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)) continue;
 
                 string fileName = Path.GetFileNameWithoutExtension(path);
-                Object[] assets = AssetDatabase.LoadAllAssetsAtPath(path);
+                var assets = AssetDatabase.LoadAllAssetsAtPath(path);
 
-                foreach (Object asset in assets)
+                foreach (var asset in assets)
                 {
                     if (!(asset is AnimationClip clip)) continue;
                     if (clip.name.StartsWith("__preview__")) continue;
@@ -38,7 +38,7 @@ public class AnimationClipRenamer : EditorWindow
                     clip.name = fileName;
                     EditorUtility.SetDirty(clip);
                     count++;
-                    Debug.Log($"Renamed: {clip.name} → {fileName} ({path})");
+                    Debug.Log($"Renamed: '{clip.name}' → '{fileName}' ({path})");
                 }
             }
         }
