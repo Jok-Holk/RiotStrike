@@ -319,7 +319,7 @@ public class WeaponEditor : Editor
 						}
 						else if (weapon.bhSystem == BulletHoleSystem.Physic_Material)
 						{
-							weapon.bulletHoleGroups[i].physicMaterial = (PhysicMaterial)EditorGUILayout.ObjectField(weapon.bulletHoleGroups[i].physicMaterial, typeof(PhysicMaterial), false);
+							weapon.bulletHoleGroups[i].physicMaterial = (PhysicsMaterial)EditorGUILayout.ObjectField(weapon.bulletHoleGroups[i].physicMaterial, typeof(PhysicsMaterial), false);
 						}
 
 						// The bullet hole to be instantiated for this type
@@ -385,7 +385,7 @@ public class WeaponEditor : Editor
 						}
 						else if (weapon.bhSystem == BulletHoleSystem.Physic_Material)
 						{
-							weapon.bulletHoleExceptions[i].physicMaterial = (PhysicMaterial)EditorGUILayout.ObjectField(weapon.bulletHoleExceptions[i].physicMaterial, typeof(PhysicMaterial), false);
+							weapon.bulletHoleExceptions[i].physicMaterial = (PhysicsMaterial)EditorGUILayout.ObjectField(weapon.bulletHoleExceptions[i].physicMaterial, typeof(PhysicsMaterial), false);
 						}
 
 
