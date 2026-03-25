@@ -13,7 +13,7 @@ public class TimerManager : MonoBehaviour
     public float rifleUnlockTime = 480f; // Mở khóa Rifle khi còn 8 phút (480s)
     private float currentTime;
     private bool isRifleUnlocked = false;
-
+    public GameObject haidang;
     void Start()
     {
         currentTime = totalTime;
@@ -33,7 +33,6 @@ public class TimerManager : MonoBehaviour
             // Xử lý khi hết sạch thời gian trận đấu ở đây
         }
     }
-
     void UpdateUI()
     {
         // 1. Xử lý định dạng thời gian 00:00
