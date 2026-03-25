@@ -1,5 +1,6 @@
 using UnityEngine;
 using Fusion;
+using RiotStrike.Data;
 
 public class WeaponController : NetworkBehaviour
 {
