@@ -13,7 +13,9 @@ public class TimerManager : MonoBehaviour
     public float rifleUnlockTime = 480f; // Mở khóa Rifle khi còn 8 phút (480s)
     private float currentTime;
     private bool isRifleUnlocked = false;
-    public GameObject haidang;
+
+
+
     void Start()
     {
         currentTime = totalTime;
