@@ -18,20 +18,21 @@ public class PlayerSpawner : MonoBehaviour
         _runner = FindFirstObjectByType<NetworkRunner>();
         if (_runner == null)
         {
-            Debug.LogError("No NetworkRunner found!");
+            Debug.LogError("PlayerSpawner: No NetworkRunner found!");
             return;
         }
 
         _spawnPointsA = GameObject.FindGameObjectsWithTag("SpawnPointA");
         _spawnPointsB = GameObject.FindGameObjectsWithTag("SpawnPointB");
-        Debug.Log($"Cached SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
-        Debug.Log($"Cached SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
-        foreach (var p in _spawnPointsA)
-            Debug.Log($"A: {p.name} at {p.transform.position}");
-        foreach (var p in _spawnPointsB)
-            Debug.Log($"B: {p.name} at {p.transform.position}");
 
-        _runner.AddCallbacks(GetComponent<SpawnCallbackHandler>());
+        Debug.Log($"SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
+
+        // SpawnCallbackHandler phải cùng GameObject này
+        var handler = GetComponent<SpawnCallbackHandler>();
+        if (handler == null)
+            Debug.LogError("PlayerSpawner: Thiếu SpawnCallbackHandler trên cùng GameObject!");
+        else
+            _runner.AddCallbacks(handler);
     }
 
     public void SpawnPlayer(PlayerRef player)
@@ -42,7 +43,7 @@ public class PlayerSpawner : MonoBehaviour
         if (team == 0) _teamACount++;
         else _teamBCount++;
 
-        Vector3 spawnPos = GetSpawnPoint(team);
+        Vector3 spawnPos = GetPublicSpawnPoint(team);
 
         NetworkObject playerObj = _runner.Spawn(
             playerPrefab,
@@ -50,10 +51,9 @@ public class PlayerSpawner : MonoBehaviour
             Quaternion.identity,
             player,
             (runner, obj) => {
-                // Set position và NetworkedPosition TRƯỚC khi Spawned() chạy
                 obj.transform.position = spawnPos;
                 var fps = obj.GetComponent<FPSController>();
-                if (fps != null) fps.InitSpawnPosition(spawnPos);
+                fps?.InitSpawnPosition(spawnPos);
             }
         );
 
@@ -68,10 +68,11 @@ public class PlayerSpawner : MonoBehaviour
             networkPlayer.Team = team;
 
         _spawnedPlayers[player] = playerObj;
-        Debug.Log($"Spawned player {player} on team {team} at {spawnPos}");
+        Debug.Log($"Spawned player {player} team {team} at {spawnPos}");
     }
 
-    Vector3 GetSpawnPoint(int team)
+    /// <summary>Public để PlayerHealth dùng khi respawn</summary>
+    public Vector3 GetPublicSpawnPoint(int team)
     {
         GameObject[] points = team == 0 ? _spawnPointsA : _spawnPointsB;
 

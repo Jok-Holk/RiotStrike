@@ -19,6 +19,11 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         instance = this;
         DontDestroyOnLoad(gameObject);
     }
@@ -50,18 +55,26 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void CreateRoom(string roomName, int maxPlayers = 8)
     {
-        if (_runner == null) return;
+        if (_runner == null)
+        {
+            OnJoinFailed?.Invoke("Chưa kết nối. Bấm KẾT NỐI trước.");
+            return;
+        }
 
         _runner.ProvideInput = true;
-        _inputProvider = gameObject.AddComponent<InputProvider>();
-        _runner.AddCallbacks(_inputProvider);
+        if (_inputProvider == null)
+        {
+            _inputProvider = gameObject.AddComponent<InputProvider>();
+            _runner.AddCallbacks(_inputProvider);
+        }
 
         var result = await _runner.StartGame(new StartGameArgs
         {
             GameMode = GameMode.AutoHostOrClient,
             SessionName = roomName,
             PlayerCount = maxPlayers,
-            Scene = SceneRef.FromIndex(2),
+            // Dùng tên scene thay vì index — tránh sai khi ai reorder Build Settings
+            Scene = SceneRef.FromIndex(SceneUtility.GetBuildIndexByScenePath("Assets/_Project/Scenes/Game.unity")),
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(),
             CustomPhotonAppSettings = new Fusion.Photon.Realtime.FusionAppSettings
             {
@@ -78,18 +91,25 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void JoinRoom(string roomName, int maxPlayers = 8)
     {
-        if (_runner == null) return;
+        if (_runner == null)
+        {
+            OnJoinFailed?.Invoke("Chưa kết nối. Bấm KẾT NỐI trước.");
+            return;
+        }
 
         _runner.ProvideInput = true;
-        _inputProvider = gameObject.AddComponent<InputProvider>();
-        _runner.AddCallbacks(_inputProvider);
+        if (_inputProvider == null)
+        {
+            _inputProvider = gameObject.AddComponent<InputProvider>();
+            _runner.AddCallbacks(_inputProvider);
+        }
 
         var result = await _runner.StartGame(new StartGameArgs
         {
             GameMode = GameMode.AutoHostOrClient,
             SessionName = roomName,
             PlayerCount = maxPlayers,
-            Scene = SceneRef.FromIndex(2),
+            Scene = SceneRef.FromIndex(SceneUtility.GetBuildIndexByScenePath("Assets/_Project/Scenes/Game.unity")),
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(),
             CustomPhotonAppSettings = new Fusion.Photon.Realtime.FusionAppSettings
             {
@@ -106,6 +126,7 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public List<SessionInfo> GetRoomList() => _sessionList;
 
+    // ─── INetworkRunnerCallbacks ───────────────────────────────────────────
     public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
     {
         _sessionList = sessionList;
@@ -120,12 +141,16 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
     public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
     {
         Debug.Log("Shutdown: " + shutdownReason);
+        _runner = null;
+        _inputProvider = null;
         SceneManager.LoadScene("MainMenu");
     }
 
     public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason)
     {
         Debug.Log("Disconnected: " + reason);
+        _runner = null;
+        _inputProvider = null;
         SceneManager.LoadScene("MainMenu");
     }
 
@@ -137,7 +162,6 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
     public void OnInput(NetworkRunner runner, NetworkInput input)
     {
         _inputProvider?.OnInput(runner, input);
-        Debug.Log($"[OnInput] MoveDir={_inputProvider?._input.MoveDirection}");
     }
     public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
     public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }

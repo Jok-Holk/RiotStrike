@@ -4,6 +4,11 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// TODO khi làm tiếp:
+/// - Thêm Button_Settings (gọi canvasSettings.SetActive(true))
+/// - Thêm Button_Back (quay về Canvas_MainMenu)
+/// </summary>
 public class LobbyUI : MonoBehaviour
 {
     [Header("Login")]
@@ -22,36 +27,49 @@ public class LobbyUI : MonoBehaviour
     [Header("Status")]
     [SerializeField] private TextMeshProUGUI statusText;
 
+    [Header("Canvas Navigation")]
+    [SerializeField] private GameObject canvasMainMenu;   // Canvas_MainMenu
+    [SerializeField] private GameObject canvasLobby;      // Canvas_Lobby (self)
+    [SerializeField] private GameObject canvasSettings;   // Canvas_Settings
+
+    // TODO: uncommment khi thêm button vào scene
+    // [SerializeField] private Button backButton;
+    // [SerializeField] private Button settingsButton;
+
     void Start()
     {
-        nickNameInput.text = "Player" + Random.Range(100, 999);
+        nickNameInput.text = PlayerPrefs.GetString("NickName", "Player" + Random.Range(100, 999));
         roomNameInput.text = "Room1";
 
         connectButton.onClick.AddListener(OnConnectClick);
         createButton.onClick.AddListener(OnCreateClick);
         joinButton.onClick.AddListener(OnJoinClick);
 
+        // TODO: uncommment khi thêm button vào scene
+        // backButton.onClick.AddListener(OnBackClick);
+        // settingsButton.onClick.AddListener(() => canvasSettings.SetActive(true));
+
         createButton.interactable = false;
         joinButton.interactable = false;
 
         LobbyManager.instance.OnRoomListUpdated += RefreshRoomList;
-        LobbyManager.instance.OnJoinFailed += OnJoinFailed;
-        LobbyManager.instance.OnConnected += OnConnectedSuccess;
+        LobbyManager.instance.OnJoinFailed      += OnJoinFailed;
+        LobbyManager.instance.OnConnected       += OnConnectedSuccess;
     }
 
     void OnDestroy()
     {
         if (LobbyManager.instance == null) return;
         LobbyManager.instance.OnRoomListUpdated -= RefreshRoomList;
-        LobbyManager.instance.OnJoinFailed -= OnJoinFailed;
-        LobbyManager.instance.OnConnected -= OnConnectedSuccess;
+        LobbyManager.instance.OnJoinFailed      -= OnJoinFailed;
+        LobbyManager.instance.OnConnected       -= OnConnectedSuccess;
     }
+
     void OnConnectClick()
     {
         string nick = nickNameInput.text.Trim();
         if (string.IsNullOrEmpty(nick)) nick = "Player";
-
-        SetStatus("Connecting...");
+        SetStatus("Đang kết nối...");
         connectButton.interactable = false;
         LobbyManager.instance.Connect(nick);
     }
@@ -59,17 +77,17 @@ public class LobbyUI : MonoBehaviour
     void OnConnectedSuccess()
     {
         createButton.interactable = true;
-        joinButton.interactable = true;
-        SetStatus("Connected. Ready to play.");
+        joinButton.interactable   = true;
+        SetStatus("Đã kết nối. Sẵn sàng chơi.");
     }
 
     void OnCreateClick()
     {
         string room = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(room)) return;
-        SetStatus("Creating room: " + room);
+        SetStatus("Đang tạo phòng: " + room);
         createButton.interactable = false;
-        joinButton.interactable = false;
+        joinButton.interactable   = false;
         LobbyManager.instance.CreateRoom(room);
     }
 
@@ -77,11 +95,18 @@ public class LobbyUI : MonoBehaviour
     {
         string room = roomNameInput.text.Trim();
         if (string.IsNullOrEmpty(room)) return;
-        SetStatus("Joining room: " + room);
+        SetStatus("Đang vào phòng: " + room);
         createButton.interactable = false;
-        joinButton.interactable = false;
+        joinButton.interactable   = false;
         LobbyManager.instance.JoinRoom(room);
     }
+
+    // TODO: uncommment khi thêm button vào scene
+    // void OnBackClick()
+    // {
+    //     canvasLobby.SetActive(false);
+    //     canvasMainMenu.SetActive(true);
+    // }
 
     void RefreshRoomList(List<SessionInfo> sessions)
     {
@@ -93,23 +118,20 @@ public class LobbyUI : MonoBehaviour
             UIRoomProfile item = Instantiate(roomProfilePrefab, roomListContent);
             item.Setup(new RoomProfile
             {
-                name = session.Name,
+                name        = session.Name,
                 playerCount = session.PlayerCount,
-                maxPlayers = session.MaxPlayers
+                maxPlayers  = session.MaxPlayers
             }, OnRoomClick);
         }
     }
 
-    void OnRoomClick(string roomName)
-    {
-        roomNameInput.text = roomName;
-    }
+    void OnRoomClick(string roomName) => roomNameInput.text = roomName;
 
     void OnJoinFailed(string reason)
     {
-        SetStatus("Failed: " + reason);
-        createButton.interactable = true;
-        joinButton.interactable = true;
+        SetStatus("Thất bại: " + reason);
+        createButton.interactable  = true;
+        joinButton.interactable    = true;
         connectButton.interactable = true;
     }
 

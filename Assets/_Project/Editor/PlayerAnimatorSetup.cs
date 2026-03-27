@@ -13,7 +13,6 @@ public class PlayerAnimatorSetup : EditorWindow
         string controllerPath = "Assets/_Project/Animations/PlayerAnimator.controller";
         string maskPath = "Assets/_Project/Animations/UpperBodyMask.mask";
 
-        // Xoá controller cũ
         if (File.Exists(controllerPath))
         {
             AssetDatabase.DeleteAsset(controllerPath);
@@ -22,16 +21,14 @@ public class PlayerAnimatorSetup : EditorWindow
 
         AnimatorController c = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
 
-        // Parameters
-        c.AddParameter("Forward", AnimatorControllerParameterType.Float);
-        c.AddParameter("Strafe", AnimatorControllerParameterType.Float);
-        c.AddParameter("Crouch", AnimatorControllerParameterType.Bool);
+        c.AddParameter("Forward",    AnimatorControllerParameterType.Float);
+        c.AddParameter("Strafe",     AnimatorControllerParameterType.Float);
+        c.AddParameter("Crouch",     AnimatorControllerParameterType.Bool);
         c.AddParameter("IsGrounded", AnimatorControllerParameterType.Bool);
-        c.AddParameter("Jump", AnimatorControllerParameterType.Trigger);
-        c.AddParameter("Death", AnimatorControllerParameterType.Trigger);
-        c.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
-        c.AddParameter("Fire", AnimatorControllerParameterType.Trigger);
-        c.AddParameter("Reload", AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Death",      AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Hit",        AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Fire",       AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Reload",     AnimatorControllerParameterType.Trigger);
         c.AddParameter("WeaponType", AnimatorControllerParameterType.Int); // 0=Rifle, 1=Pistol
 
         SetupBaseLayer(c, animPath);
@@ -39,23 +36,23 @@ public class PlayerAnimatorSetup : EditorWindow
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("PlayerAnimator setup complete!");
+        Debug.Log("PlayerAnimator setup complete! (Jump removed)");
     }
 
     // ─── BASE LAYER (locomotion full body) ───────────────────────────────────
     static void SetupBaseLayer(AnimatorController c, string p)
     {
         var sm = c.layers[0].stateMachine;
-        sm.entryPosition  = new Vector2(-300, 0);
+        sm.entryPosition    = new Vector2(-300, 0);
         sm.anyStatePosition = new Vector2(-300, 80);
-        sm.exitPosition   = new Vector2(-300, 160);
+        sm.exitPosition     = new Vector2(-300, 160);
 
-        // ── Stand Blend Tree ──
+        // Stand Blend Tree
         var standState = sm.AddState("Stand", new Vector2(100, 0));
         standState.motion = BuildLocomotionTree(c, p, false);
         sm.defaultState = standState;
 
-        // ── Crouch Blend Tree ──
+        // Crouch Blend Tree
         var crouchState = sm.AddState("Crouch", new Vector2(100, 140));
         crouchState.motion = BuildLocomotionTree(c, p, true);
 
@@ -68,17 +65,7 @@ public class PlayerAnimatorSetup : EditorWindow
         toS.hasExitTime = false; toS.duration = 0.15f;
         toS.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
 
-        // ── Jump ──
-        var jumpState = sm.AddState("Jump", new Vector2(350, 0));
-        jumpState.motion = LoadClip(p + "/Rifle/Pistol Jump.fbx");
-        var jumpIn = sm.AddAnyStateTransition(jumpState);
-        jumpIn.hasExitTime = false; jumpIn.duration = 0.05f;
-        jumpIn.canTransitionToSelf = false;
-        jumpIn.AddCondition(AnimatorConditionMode.If, 0, "Jump");
-        var jumpOut = jumpState.AddTransition(standState);
-        jumpOut.hasExitTime = true; jumpOut.exitTime = 0.85f; jumpOut.duration = 0.15f;
-
-        // ── Death ──
+        // Death
         var deathState = sm.AddState("Death", new Vector2(350, 140));
         deathState.motion = LoadClip(p + "/Rifle/Dying.fbx");
         var deathIn = sm.AddAnyStateTransition(deathState);
@@ -96,29 +83,28 @@ public class PlayerAnimatorSetup : EditorWindow
         var tree = new BlendTree();
         AssetDatabase.AddObjectToAsset(tree, c);
         tree.name = crouch ? "CrouchLocomotion" : "StandLocomotion";
-        tree.blendType = BlendTreeType.FreeformCartesian2D;
-        tree.blendParameter  = "Strafe";
-        tree.blendParameterY = "Forward";
+        tree.blendType           = BlendTreeType.FreeformCartesian2D;
+        tree.blendParameter      = "Strafe";
+        tree.blendParameterY     = "Forward";
         tree.useAutomaticThresholds = false;
 
         if (!crouch)
         {
-            // Stand — Rifle clips (WeaponType switching handled in Weapon Layer)
-            AddMotion(tree, c, p + "/Rifle/Rifle Aiming Idle.fbx",     0,  0);
-            AddMotion(tree, c, p + "/Rifle/Walk With Rifle.fbx",        0,  1);
-            AddMotion(tree, c, p + "/Rifle/Walking Backwards.fbx",      0, -1);
-            AddMotion(tree, c, p + "/Rifle/Strafe Left.fbx",           -1,  0);
-            AddMotion(tree, c, p + "/Rifle/Strafe Right.fbx",           1,  0);
-            AddMotion(tree, c, p + "/Rifle/Rifle Run.fbx",              0,  2);
+            // Stand — forward/back/strafe/run — không có jump
+            AddMotion(tree, c, p + "/Rifle/Rifle Aiming Idle.fbx",   0,  0);
+            AddMotion(tree, c, p + "/Rifle/Walk With Rifle.fbx",      0,  1);
+            AddMotion(tree, c, p + "/Rifle/Walking Backwards.fbx",    0, -1);
+            AddMotion(tree, c, p + "/Rifle/Strafe Left.fbx",         -1,  0);
+            AddMotion(tree, c, p + "/Rifle/Strafe Right.fbx",         1,  0);
+            AddMotion(tree, c, p + "/Rifle/Rifle Run.fbx",            0,  2); // sprint
         }
         else
         {
-            // Crouch
-            AddMotion(tree, c, p + "/Rifle/Idle Crouching Aiming.fbx",      0,  0);
-            AddMotion(tree, c, p + "/Rifle/Walk Crouching Forward.fbx",      0,  1);
-            AddMotion(tree, c, p + "/Rifle/Walk Crouching Backward.fbx",     0, -1);
-            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Left.fbx",    -1,  0);
-            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Right.fbx",    1,  0);
+            AddMotion(tree, c, p + "/Rifle/Idle Crouching Aiming.fbx",    0,  0);
+            AddMotion(tree, c, p + "/Rifle/Walk Crouching Forward.fbx",   0,  1);
+            AddMotion(tree, c, p + "/Rifle/Walk Crouching Backward.fbx",  0, -1);
+            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Left.fbx",  -1, 0);
+            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Right.fbx",  1, 0);
         }
 
         return tree;
@@ -128,91 +114,75 @@ public class PlayerAnimatorSetup : EditorWindow
     static void SetupWeaponLayer(AnimatorController c, string p, string maskPath)
     {
         var wLayer = new AnimatorControllerLayer();
-        wLayer.name = "WeaponLayer";
+        wLayer.name          = "WeaponLayer";
         wLayer.defaultWeight = 1f;
-        wLayer.blendingMode = AnimatorLayerBlendingMode.Override;
+        wLayer.blendingMode  = AnimatorLayerBlendingMode.Override;
 
         var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(maskPath);
         if (mask != null) wLayer.avatarMask = mask;
-        else Debug.LogWarning("UpperBodyMask not found at: " + maskPath);
+        else Debug.LogWarning("UpperBodyMask not found: " + maskPath);
 
         var sm = new AnimatorStateMachine();
         sm.name = "WeaponLayer";
         AssetDatabase.AddObjectToAsset(sm, c);
-        sm.hideFlags = HideFlags.HideInHierarchy;
-        sm.entryPosition   = new Vector2(-300, 0);
+        sm.hideFlags        = HideFlags.HideInHierarchy;
+        sm.entryPosition    = new Vector2(-300, 0);
         sm.anyStatePosition = new Vector2(-300, 80);
         wLayer.stateMachine = sm;
 
-        // ── Rifle idle ──
+        // ── Rifle Idle (default) ──
         var rifleIdle = sm.AddState("RifleIdle", new Vector2(0, 0));
         rifleIdle.motion = LoadClip(p + "/Rifle/Rifle Aiming Idle.fbx");
         sm.defaultState = rifleIdle;
 
-        // ── Pistol idle ──
+        // ── Pistol Idle ──
         var pistolIdle = sm.AddState("PistolIdle", new Vector2(0, 140));
         pistolIdle.motion = LoadClip(p + "/Pistol/In-Place/W1_Stand_Aim_Idle_IPC.fbx");
 
         // Rifle ↔ Pistol switch
-        AddWeaponSwitch(rifleIdle, pistolIdle, "WeaponType", 1);
-        AddWeaponSwitch(pistolIdle, rifleIdle, "WeaponType", 0);
+        AddWeaponSwitch(rifleIdle,  pistolIdle, "WeaponType", 1);
+        AddWeaponSwitch(pistolIdle, rifleIdle,  "WeaponType", 0);
 
-        // ── Fire (Rifle) ──
-        var rifleFireState = sm.AddState("RifleFire", new Vector2(300, 0));
-        rifleFireState.motion = LoadClip(p + "/Rifle/Firing Rifle.fbx");
-        AddAnyTrigger(sm, rifleFireState, "Fire", "WeaponType", 0);
-        AddExitToState(rifleFireState, rifleIdle, 1f, 0.05f);
+        // ── Rifle Fire (stand) ──
+        var rifleFire = sm.AddState("RifleFire", new Vector2(300, 0));
+        rifleFire.motion = LoadClip(p + "/Rifle/Firing Rifle.fbx");
+        AddAnyTrigger(sm, rifleFire, "Fire", "WeaponType", 0, false);
+        AddExitToState(rifleFire, rifleIdle, 1f, 0.05f);
 
-        // ── Fire Crouch (Rifle) ──
+        // ── Rifle Fire (crouch) ──
         var rifleCrouchFire = sm.AddState("RifleCrouchFire", new Vector2(300, 70));
         rifleCrouchFire.motion = LoadClip(p + "/Rifle/Fire Crouch Rifle.fbx");
-        // Transition from any with Crouch=true + Fire
-        var rfcTrans = sm.AddAnyStateTransition(rifleCrouchFire);
-        rfcTrans.hasExitTime = false; rfcTrans.duration = 0.05f;
-        rfcTrans.canTransitionToSelf = false;
-        rfcTrans.AddCondition(AnimatorConditionMode.If, 0, "Fire");
-        rfcTrans.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
-        rfcTrans.AddCondition(AnimatorConditionMode.Equals, 0, "WeaponType");
+        AddAnyTrigger(sm, rifleCrouchFire, "Fire", "WeaponType", 0, true);
         AddExitToState(rifleCrouchFire, rifleIdle, 1f, 0.1f);
 
-        // ── Reload (Rifle stand) ──
+        // ── Rifle Reload (stand) ──
         var rifleReload = sm.AddState("RifleReload", new Vector2(300, 140));
         rifleReload.motion = LoadClip(p + "/Rifle/Reloading.fbx");
-        AddAnyTrigger(sm, rifleReload, "Reload", "WeaponType", 0);
+        AddAnyTrigger(sm, rifleReload, "Reload", "WeaponType", 0, false);
         AddExitToState(rifleReload, rifleIdle, 1f, 0.1f);
 
-        // ── Reload Crouch (Rifle) ──
+        // ── Rifle Reload (crouch) ──
         var rifleCrouchReload = sm.AddState("RifleCrouchReload", new Vector2(300, 210));
         rifleCrouchReload.motion = LoadClip(p + "/Rifle/Crouch Reloading.fbx");
-        var rcrTrans = sm.AddAnyStateTransition(rifleCrouchReload);
-        rcrTrans.hasExitTime = false; rcrTrans.duration = 0.1f;
-        rcrTrans.canTransitionToSelf = false;
-        rcrTrans.AddCondition(AnimatorConditionMode.If, 0, "Reload");
-        rcrTrans.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
-        rcrTrans.AddCondition(AnimatorConditionMode.Equals, 0, "WeaponType");
+        AddAnyTrigger(sm, rifleCrouchReload, "Reload", "WeaponType", 0, true);
         AddExitToState(rifleCrouchReload, rifleIdle, 1f, 0.1f);
 
-        // ── Fire (Pistol) ──
+        // ── Pistol Fire (stand) ──
         var pistolFire = sm.AddState("PistolFire", new Vector2(0, 280));
         pistolFire.motion = LoadClip(p + "/Pistol/Fire/W1_Stand_Fire_Single.fbx");
-        AddAnyTrigger(sm, pistolFire, "Fire", "WeaponType", 1);
+        AddAnyTrigger(sm, pistolFire, "Fire", "WeaponType", 1, false);
         AddExitToState(pistolFire, pistolIdle, 1f, 0.05f);
 
-        // ── Fire Crouch (Pistol) ──
+        // ── Pistol Fire (crouch) ──
         var pistolCrouchFire = sm.AddState("PistolCrouchFire", new Vector2(0, 350));
         pistolCrouchFire.motion = LoadClip(p + "/Pistol/Fire/W1_Crouch_Fire_Single.fbx");
-        var pcfTrans = sm.AddAnyStateTransition(pistolCrouchFire);
-        pcfTrans.hasExitTime = false; pcfTrans.duration = 0.05f;
-        pcfTrans.canTransitionToSelf = false;
-        pcfTrans.AddCondition(AnimatorConditionMode.If, 0, "Fire");
-        pcfTrans.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
-        pcfTrans.AddCondition(AnimatorConditionMode.Equals, 1, "WeaponType");
+        AddAnyTrigger(sm, pistolCrouchFire, "Fire", "WeaponType", 1, true);
         AddExitToState(pistolCrouchFire, pistolIdle, 1f, 0.05f);
 
-        // ── Reload (Pistol) — dùng Rifle Reload vì không có pistol reload clip ──
+        // ── Pistol Reload ──
         var pistolReload = sm.AddState("PistolReload", new Vector2(0, 420));
-        pistolReload.motion = LoadClip(p + "/Rifle/Reloading.fbx");
-        AddAnyTrigger(sm, pistolReload, "Reload", "WeaponType", 1);
+        pistolReload.motion = LoadClip(p + "/Rifle/Reloading.fbx"); // dùng tạm rifle reload
+        AddAnyTrigger(sm, pistolReload, "Reload", "WeaponType", 1, false);
         AddExitToState(pistolReload, pistolIdle, 1f, 0.1f);
 
         // ── Hit Reaction ──
@@ -222,6 +192,7 @@ public class PlayerAnimatorSetup : EditorWindow
         hitTrans.hasExitTime = false; hitTrans.duration = 0.05f;
         hitTrans.canTransitionToSelf = false;
         hitTrans.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+        hitTrans.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
         AddExitToState(hitState, rifleIdle, 0.9f, 0.1f);
 
         // ── Crouch Hit ──
@@ -254,22 +225,30 @@ public class PlayerAnimatorSetup : EditorWindow
         t.AddCondition(AnimatorConditionMode.Equals, value, param);
     }
 
+    /// <summary>
+    /// crouch=true thêm condition Crouch=true, crouch=false thêm Crouch=false
+    /// để state stand và crouch không lẫn nhau
+    /// </summary>
     static void AddAnyTrigger(AnimatorStateMachine sm, AnimatorState target,
-        string trigger, string weaponParam, int weaponValue)
+        string trigger, string weaponParam, int weaponValue, bool crouch)
     {
         var t = sm.AddAnyStateTransition(target);
         t.hasExitTime = false; t.duration = 0.05f;
         t.canTransitionToSelf = false;
         t.AddCondition(AnimatorConditionMode.If, 0, trigger);
         t.AddCondition(AnimatorConditionMode.Equals, weaponValue, weaponParam);
+        if (crouch)
+            t.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
+        else
+            t.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
     }
 
     static void AddExitToState(AnimatorState from, AnimatorState to, float exitTime, float duration)
     {
         var t = from.AddTransition(to);
         t.hasExitTime = true;
-        t.exitTime = exitTime;
-        t.duration = duration;
+        t.exitTime    = exitTime;
+        t.duration    = duration;
     }
 
     static AnimationClip LoadClip(string path)
