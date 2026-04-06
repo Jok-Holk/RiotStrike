@@ -4,20 +4,18 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// TODO khi làm tiếp:
-/// - Thêm Button_Settings (gọi canvasSettings.SetActive(true))
-/// - Thêm Button_Back (quay về Canvas_MainMenu)
-/// </summary>
 public class LobbyUI : MonoBehaviour
 {
     [Header("Login")]
     [SerializeField] private TMP_InputField nickNameInput;
     [SerializeField] private Button connectButton;
 
-    [Header("Room")]
-    [SerializeField] private TMP_InputField roomNameInput;
+    [Header("Room - Create")]
+    [SerializeField] private TMP_InputField roomNameCreateInput;
     [SerializeField] private Button createButton;
+
+    [Header("Room - Join")]
+    [SerializeField] private TMP_InputField roomNameJoinInput;
     [SerializeField] private Button joinButton;
 
     [Header("Room List")]
@@ -28,110 +26,147 @@ public class LobbyUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI statusText;
 
     [Header("Canvas Navigation")]
-    [SerializeField] private GameObject canvasMainMenu;   // Canvas_MainMenu
-    [SerializeField] private GameObject canvasLobby;      // Canvas_Lobby (self)
-    [SerializeField] private GameObject canvasSettings;   // Canvas_Settings
+    [SerializeField] private GameObject canvasMainMenu;
+    [SerializeField] private GameObject canvasLobby;
+    [SerializeField] private GameObject canvasSettings;
+    [SerializeField] private GameObject canvasRoom;
 
-    // TODO: uncommment khi thêm button vào scene
-    // [SerializeField] private Button backButton;
-    // [SerializeField] private Button settingsButton;
+    // Lưu trong memory, không dùng PlayerPrefs để tránh share giữa 2 instance
+    private static string _sessionNickName = "";
+    private static string _sessionRoomName = "";
 
     void Start()
     {
-        nickNameInput.text = PlayerPrefs.GetString("NickName", "Player" + Random.Range(100, 999));
-        roomNameInput.text = "Room1";
+        // Mỗi lần Start, nếu chưa có tên thì random mới
+        if (string.IsNullOrEmpty(_sessionNickName))
+            _sessionNickName = "Player" + Random.Range(100, 999);
+
+        nickNameInput.text = _sessionNickName;
+        roomNameCreateInput.text = "Room" + Random.Range(1, 100);
+        roomNameJoinInput.text = _sessionRoomName;
 
         connectButton.onClick.AddListener(OnConnectClick);
         createButton.onClick.AddListener(OnCreateClick);
         joinButton.onClick.AddListener(OnJoinClick);
 
-        // TODO: uncommment khi thêm button vào scene
-        // backButton.onClick.AddListener(OnBackClick);
-        // settingsButton.onClick.AddListener(() => canvasSettings.SetActive(true));
-
         createButton.interactable = false;
         joinButton.interactable = false;
 
         LobbyManager.instance.OnRoomListUpdated += RefreshRoomList;
-        LobbyManager.instance.OnJoinFailed      += OnJoinFailed;
-        LobbyManager.instance.OnConnected       += OnConnectedSuccess;
+        LobbyManager.instance.OnJoinFailed += OnJoinFailed;
+        LobbyManager.instance.OnConnected += OnConnectedSuccess;
+        LobbyManager.instance.OnRoomJoined += OnRoomJoined;
+
+        var existing = LobbyManager.instance.GetRoomList();
+        if (existing != null && existing.Count > 0)
+            RefreshRoomList(existing);
+    }
+
+    void OnEnable()
+    {
+        if (LobbyManager.instance == null) return;
+        var existing = LobbyManager.instance.GetRoomList();
+        if (existing != null && existing.Count > 0)
+            RefreshRoomList(existing);
     }
 
     void OnDestroy()
     {
         if (LobbyManager.instance == null) return;
         LobbyManager.instance.OnRoomListUpdated -= RefreshRoomList;
-        LobbyManager.instance.OnJoinFailed      -= OnJoinFailed;
-        LobbyManager.instance.OnConnected       -= OnConnectedSuccess;
+        LobbyManager.instance.OnJoinFailed -= OnJoinFailed;
+        LobbyManager.instance.OnConnected -= OnConnectedSuccess;
+        LobbyManager.instance.OnRoomJoined -= OnRoomJoined;
     }
 
     void OnConnectClick()
     {
         string nick = nickNameInput.text.Trim();
-        if (string.IsNullOrEmpty(nick)) nick = "Player";
+        if (string.IsNullOrEmpty(nick)) nick = "Player" + Random.Range(100, 999);
+
+        // Lưu vào session memory, KHÔNG ghi PlayerPrefs
+        _sessionNickName = nick;
+
         SetStatus("Đang kết nối...");
         connectButton.interactable = false;
+
+        // Truyền nick trực tiếp, không qua PlayerPrefs
         LobbyManager.instance.Connect(nick);
     }
 
     void OnConnectedSuccess()
     {
         createButton.interactable = true;
-        joinButton.interactable   = true;
+        joinButton.interactable = true;
         SetStatus("Đã kết nối. Sẵn sàng chơi.");
     }
 
     void OnCreateClick()
     {
-        string room = roomNameInput.text.Trim();
-        if (string.IsNullOrEmpty(room)) return;
+        string room = roomNameCreateInput.text.Trim();
+        if (string.IsNullOrEmpty(room)) room = "Room" + Random.Range(1, 999);
         SetStatus("Đang tạo phòng: " + room);
         createButton.interactable = false;
-        joinButton.interactable   = false;
+        joinButton.interactable = false;
         LobbyManager.instance.CreateRoom(room);
     }
 
     void OnJoinClick()
     {
-        string room = roomNameInput.text.Trim();
-        if (string.IsNullOrEmpty(room)) return;
+        string room = roomNameJoinInput.text.Trim();
+        if (string.IsNullOrEmpty(room))
+        {
+            SetStatus("Nhập tên phòng hoặc chọn từ danh sách!");
+            return;
+        }
+        _sessionRoomName = room;
         SetStatus("Đang vào phòng: " + room);
         createButton.interactable = false;
-        joinButton.interactable   = false;
+        joinButton.interactable = false;
         LobbyManager.instance.JoinRoom(room);
     }
 
-    // TODO: uncommment khi thêm button vào scene
-    // void OnBackClick()
-    // {
-    //     canvasLobby.SetActive(false);
-    //     canvasMainMenu.SetActive(true);
-    // }
+    void OnRoomJoined()
+    {
+        canvasLobby.SetActive(false);
+        canvasRoom.SetActive(true);
+    }
 
     void RefreshRoomList(List<SessionInfo> sessions)
     {
         foreach (Transform child in roomListContent)
             Destroy(child.gameObject);
 
+        if (sessions == null || sessions.Count == 0)
+        {
+            SetStatus("Chưa có phòng nào. Hãy tạo phòng mới!");
+            return;
+        }
+
         foreach (SessionInfo session in sessions)
         {
+            if (!session.IsOpen || !session.IsVisible) continue;
             UIRoomProfile item = Instantiate(roomProfilePrefab, roomListContent);
             item.Setup(new RoomProfile
             {
-                name        = session.Name,
+                name = session.Name,
                 playerCount = session.PlayerCount,
-                maxPlayers  = session.MaxPlayers
+                maxPlayers = session.MaxPlayers
             }, OnRoomClick);
         }
     }
 
-    void OnRoomClick(string roomName) => roomNameInput.text = roomName;
+    void OnRoomClick(string roomName)
+    {
+        roomNameJoinInput.text = roomName;
+        SetStatus($"Đã chọn: {roomName} — Nhấn JOIN để vào.");
+    }
 
     void OnJoinFailed(string reason)
     {
         SetStatus("Thất bại: " + reason);
-        createButton.interactable  = true;
-        joinButton.interactable    = true;
+        createButton.interactable = true;
+        joinButton.interactable = true;
         connectButton.interactable = true;
     }
 

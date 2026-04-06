@@ -7,10 +7,9 @@ public class PlayerHealth : NetworkBehaviour
     [Networked] public int Health { get; set; }
 
     [Header("Settings")]
-    [SerializeField] private int maxHealth = 100;
+    [SerializeField] private int   maxHealth    = 100;
     [SerializeField] private float respawnDelay = 3f;
 
-    // UI / HUD có thể subscribe event này
     public static event Action<PlayerHealth> OnHealthChanged;
     public static event Action<PlayerHealth> OnPlayerDied;
 
@@ -22,7 +21,7 @@ public class PlayerHealth : NetworkBehaviour
             Health = maxHealth;
     }
 
-    public void TakeDamage(int damage)
+    public void TakeDamage(int damage, PlayerRef killerRef = default)
     {
         if (!Object.HasStateAuthority) return;
         if (_isDead) return;
@@ -31,35 +30,47 @@ public class PlayerHealth : NetworkBehaviour
         RPC_NotifyHealthChanged();
 
         if (Health <= 0)
-            StartDeath();
+            StartDeath(killerRef);
     }
 
-    void StartDeath()
+    void StartDeath(PlayerRef killerRef)
     {
         _isDead = true;
-        RPC_OnDied();
 
-        // Respawn sau delay
+        // Tìm team của killer để register kill
+        if (GameManager.instance != null && killerRef != default)
+        {
+            int killerTeam = GetKillerTeam(killerRef);
+            GameManager.instance.RegisterKill(killerTeam);
+        }
+
+        RPC_OnDied();
         StartCoroutine(RespawnAfterDelay());
+    }
+
+    int GetKillerTeam(PlayerRef killerRef)
+    {
+        if (RoomPlayerData.instance == null) return 0;
+        foreach (var slot in RoomPlayerData.instance.GetOccupied())
+            if (slot.PlayerRef == killerRef)
+                return slot.Team;
+        return 0;
     }
 
     System.Collections.IEnumerator RespawnAfterDelay()
     {
         yield return new WaitForSeconds(respawnDelay);
-
         if (!Object.HasStateAuthority) yield break;
 
-        Health = maxHealth;
+        Health  = maxHealth;
         _isDead = false;
 
-        // Teleport về spawn point
         var spawner = FindFirstObjectByType<PlayerSpawner>();
         if (spawner != null)
         {
-            var np = GetComponent<NetworkPlayer>();
+            var np   = GetComponent<NetworkPlayer>();
             int team = np != null ? np.Team : 0;
             Vector3 spawnPos = spawner.GetPublicSpawnPoint(team);
-            transform.position = spawnPos;
 
             var fps = GetComponent<FPSController>();
             fps?.InitSpawnPosition(spawnPos);
@@ -75,6 +86,6 @@ public class PlayerHealth : NetworkBehaviour
     void RPC_OnDied()
     {
         OnPlayerDied?.Invoke(this);
-        Debug.Log($"Player {gameObject.name} died");
+        Debug.Log($"[PlayerHealth] {gameObject.name} died");
     }
 }

@@ -7,17 +7,56 @@ using UnityEngine;
 public class SpawnCallbackHandler : MonoBehaviour, INetworkRunnerCallbacks
 {
     private PlayerSpawner _spawner;
+    private NetworkRunner _runner;
+    private bool _sceneLoaded = false;
 
-    void Awake() => _spawner = GetComponent<PlayerSpawner>();
+    void Awake()
+    {
+        _spawner = GetComponent<PlayerSpawner>();
+    }
+
+    void Start()
+    {
+        _runner = FindFirstObjectByType<NetworkRunner>();
+        if (_runner != null)
+            _runner.AddCallbacks(this);
+        else
+            Debug.LogError("SpawnCallbackHandler: No NetworkRunner found!");
+    }
+
+    public void OnSceneLoadDone(NetworkRunner runner)
+    {
+        if (!runner.IsServer) return;
+        _sceneLoaded = true;
+
+        Debug.Log("[SpawnCallbackHandler] Scene loaded, spawning all players...");
+
+        // Scene load xong mới spawn — đảm bảo collider map đã có
+        foreach (var player in runner.ActivePlayers)
+        {
+            if (_spawner != null)
+                _spawner.SpawnPlayer(player);
+        }
+    }
 
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
     {
         if (!runner.IsServer) return;
-        Debug.Log("SpawnCallbackHandler OnPlayerJoined: " + player);
-        _spawner.SpawnPlayer(player);
+
+        // Nếu scene chưa load xong thì bỏ qua
+        // OnSceneLoadDone sẽ spawn tất cả
+        if (!_sceneLoaded) return;
+
+        Debug.Log("[SpawnCallbackHandler] Late join: " + player);
+        _spawner?.SpawnPlayer(player);
     }
 
-    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+        if (!runner.IsServer) return;
+        _spawner?.DespawnPlayer(player);
+    }
+
     public void OnInput(NetworkRunner runner, NetworkInput input) { }
     public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
     public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason) { }
@@ -31,8 +70,7 @@ public class SpawnCallbackHandler : MonoBehaviour, INetworkRunnerCallbacks
     public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
     public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
     public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
-    public void OnSceneLoadDone(NetworkRunner runner) { }
-    public void OnSceneLoadStart(NetworkRunner runner) { }
+    public void OnSceneLoadStart(NetworkRunner runner) { _sceneLoaded = false; }
     public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
     public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
 }
