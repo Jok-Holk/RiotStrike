@@ -15,8 +15,6 @@ public class HostConfigManager : MonoBehaviour
     public TextMeshProUGUI rifleTimeText;
     public GameObject warningText; // Kéo Text cảnh báo đỏ vào đây
 
-    
-
     void Start()
     {
         // Gán sự kiện khi thay đổi giá trị
