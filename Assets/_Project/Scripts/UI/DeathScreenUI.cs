@@ -1,3 +1,11 @@
+using UnityEngine;              // cho MonoBehaviour, GameObject, SerializeField
+using TMPro;                    // cho TextMeshProUGUI
+using UnityEngine;
+using TMPro;
+using System.Collections;
+
+using System.Collections;       // cho IEnumerator
+
 public class DeathScreenUI : MonoBehaviour
 {
     [SerializeField] private GameObject deathPanel;
