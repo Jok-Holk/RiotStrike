@@ -15,46 +15,46 @@ public class HostConfigManager : MonoBehaviour
     public TextMeshProUGUI pistolTimeText;
     public TextMeshProUGUI rifleTimeText;
     public TextMeshProUGUI roundTimeText;
-    public GameObject      warningText;  // hiện khi RoundTime = 0
+    public GameObject warningText;  // hiện khi RoundTime = 0
 
-    public int WaitTime   { get; private set; } = 30;
+    public int WaitTime { get; private set; } = 30;
     public int PistolTime { get; private set; } = 60;
-    public int RifleTime  { get; private set; } = 120;
-    public int RoundTime  => PistolTime + RifleTime;
+    public int RifleTime { get; private set; } = 120;
+    public int RoundTime => PistolTime + RifleTime;
 
     void Start()
     {
         // Min = 0 để tự do, max theo thiết kế
-        waitTimeSlider.minValue   = 10;  waitTimeSlider.maxValue   = 60;
-        pistolTimeSlider.minValue = 0;   pistolTimeSlider.maxValue = 180;
-        rifleTimeSlider.minValue  = 0;   rifleTimeSlider.maxValue  = 420;
+        waitTimeSlider.minValue = 10; waitTimeSlider.maxValue = 60;
+        pistolTimeSlider.minValue = 0; pistolTimeSlider.maxValue = 180;
+        rifleTimeSlider.minValue = 0; rifleTimeSlider.maxValue = 420;
 
-        waitTimeSlider.wholeNumbers   = true;
+        waitTimeSlider.wholeNumbers = true;
         pistolTimeSlider.wholeNumbers = true;
-        rifleTimeSlider.wholeNumbers  = true;
+        rifleTimeSlider.wholeNumbers = true;
 
         // Default
-        waitTimeSlider.value   = 30;
+        waitTimeSlider.value = 30;
         pistolTimeSlider.value = 60;
-        rifleTimeSlider.value  = 120;
+        rifleTimeSlider.value = 120;
 
-        waitTimeSlider.onValueChanged.AddListener(_   => UpdateConfig());
+        waitTimeSlider.onValueChanged.AddListener(_ => UpdateConfig());
         pistolTimeSlider.onValueChanged.AddListener(_ => UpdateConfig());
-        rifleTimeSlider.onValueChanged.AddListener(_  => UpdateConfig());
+        rifleTimeSlider.onValueChanged.AddListener(_ => UpdateConfig());
 
         UpdateConfig();
     }
 
     public void UpdateConfig()
     {
-        WaitTime   = Mathf.RoundToInt(waitTimeSlider.value);
+        WaitTime = Mathf.RoundToInt(waitTimeSlider.value);
         PistolTime = Mathf.RoundToInt(pistolTimeSlider.value);
-        RifleTime  = Mathf.RoundToInt(rifleTimeSlider.value);
+        RifleTime = Mathf.RoundToInt(rifleTimeSlider.value);
 
-        waitTimeText.text   = FormatTime(WaitTime);
+        waitTimeText.text = FormatTime(WaitTime);
         pistolTimeText.text = FormatTime(PistolTime);
-        rifleTimeText.text  = FormatTime(RifleTime);
-        roundTimeText.text  = FormatTime(RoundTime);
+        rifleTimeText.text = FormatTime(RifleTime);
+        roundTimeText.text = FormatTime(RoundTime);
 
         // Warning khi cả 2 đều = 0 → trận không có thời gian
         if (warningText != null)

@@ -1,3 +1,4 @@
+using UnityEngine;
 public class ScoreboardUI : MonoBehaviour
 {
     [SerializeField] private GameObject panel;

@@ -1,3 +1,6 @@
+using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
 public class EndRoundUI : MonoBehaviour
 {
     public static EndRoundUI instance;
@@ -7,13 +10,14 @@ public class EndRoundUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI scoreText;
     [SerializeField] private Button restartButton;
 
+
     void Awake() => instance = this;
 
     void Start()
     {
         var runner = FindFirstObjectByType<NetworkRunner>();
-        if (restartButton != null)
-            restartButton.gameObject.SetActive(runner != null && runner.IsServer);
+        if (RestartButton != null)
+            RestartButton.gameObject.SetActive(runner != null && runner.IsServer);
     }
 
     public void ShowResult(string result, int scoreA, int scoreB)
