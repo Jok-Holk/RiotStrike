@@ -2,82 +2,119 @@
 using Fusion;
 using UnityEngine;
 
-public class PlayerSpawner : MonoBehaviour
+public class PlayerSpawner : NetworkBehaviour
 {
     [SerializeField] private NetworkObject playerPrefab;
 
-    private NetworkRunner _runner;
     private Dictionary<PlayerRef, NetworkObject> _spawnedPlayers = new();
     private int _teamACount;
     private int _teamBCount;
     private GameObject[] _spawnPointsA;
     private GameObject[] _spawnPointsB;
 
-    void Start()
+    public override void Spawned()
     {
-        _runner = FindFirstObjectByType<NetworkRunner>();
-        if (_runner == null)
-        {
-            Debug.LogError("No NetworkRunner found!");
-            return;
-        }
-
         _spawnPointsA = GameObject.FindGameObjectsWithTag("SpawnPointA");
         _spawnPointsB = GameObject.FindGameObjectsWithTag("SpawnPointB");
-        Debug.Log($"Cached SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
-        Debug.Log($"Cached SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
-        foreach (var p in _spawnPointsA)
-            Debug.Log($"A: {p.name} at {p.transform.position}");
-        foreach (var p in _spawnPointsB)
-            Debug.Log($"B: {p.name} at {p.transform.position}");
-
-        _runner.AddCallbacks(GetComponent<SpawnCallbackHandler>());
+        Debug.Log($"SpawnPointA: {_spawnPointsA.Length}, SpawnPointB: {_spawnPointsB.Length}");
+        // Không spawn ở đây — SpawnCallbackHandler.OnSceneLoadDone sẽ xử lý
+        // để đảm bảo map collider đã load xong
     }
 
     public void SpawnPlayer(PlayerRef player)
     {
-        if (!_runner.IsServer) return;
+        if (!Object.HasStateAuthority) return;
+        if (_spawnedPlayers.ContainsKey(player)) return;
 
-        int team = _teamACount <= _teamBCount ? 0 : 1;
+        // Lấy team từ RoomPlayerData nếu có, không thì cân bằng
+        int team = GetTeamForPlayer(player);
         if (team == 0) _teamACount++;
-        else _teamBCount++;
+        else           _teamBCount++;
 
-        Vector3 spawnPos = GetSpawnPoint(team);
+        Vector3 spawnPos = GetPublicSpawnPoint(team);
 
-        NetworkObject playerObj = _runner.Spawn(
+        NetworkObject playerObj = Runner.Spawn(
             playerPrefab,
             spawnPos,
             Quaternion.identity,
             player,
             (runner, obj) => {
-                // Set position và NetworkedPosition TRƯỚC khi Spawned() chạy
                 obj.transform.position = spawnPos;
                 var fps = obj.GetComponent<FPSController>();
-                if (fps != null) fps.InitSpawnPosition(spawnPos);
+                fps?.InitSpawnPosition(spawnPos);
+
+                var np = obj.GetComponent<NetworkPlayer>();
+                if (np != null) np.Team = team;
             }
         );
 
         if (playerObj == null)
         {
-            Debug.LogError("Spawn returned null!");
+            Debug.LogError($"Spawn returned null for player {player}!");
             return;
         }
 
-        var networkPlayer = playerObj.GetComponent<NetworkPlayer>();
-        if (networkPlayer != null)
-            networkPlayer.Team = team;
-
         _spawnedPlayers[player] = playerObj;
-        Debug.Log($"Spawned player {player} on team {team} at {spawnPos}");
+        Debug.Log($"Spawned player {player} team {team} at {spawnPos}");
     }
 
-    Vector3 GetSpawnPoint(int team)
+    int GetTeamForPlayer(PlayerRef player)
+    {
+        // Đọc team từ RoomPlayerData nếu còn tồn tại
+        if (RoomPlayerData.instance != null)
+        {
+            var slots = RoomPlayerData.instance.GetOccupied();
+            foreach (var slot in slots)
+                if (slot.PlayerRef == player)
+                    return slot.Team;
+        }
+        // Fallback: cân bằng team
+        return _teamACount <= _teamBCount ? 0 : 1;
+    }
+
+    public void DespawnPlayer(PlayerRef player)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (_spawnedPlayers.TryGetValue(player, out var obj))
+        {
+            if (obj != null) Runner.Despawn(obj);
+            _spawnedPlayers.Remove(player);
+        }
+    }
+
+    public Vector3 GetPublicSpawnPoint(int team)
     {
         GameObject[] points = team == 0 ? _spawnPointsA : _spawnPointsB;
-
         if (points == null || points.Length == 0)
             return new Vector3(team == 0 ? -10f : 10f, 1f, Random.Range(-5f, 5f));
 
-        return points[Random.Range(0, points.Length)].transform.position;
+        // Shuffle để random thứ tự kiểm tra
+        var shuffled = new List<GameObject>(points);
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+
+        // Tìm spawn point không có player đứng
+        float checkRadius = 1.2f; // bán kính CharacterController
+        foreach (var point in shuffled)
+        {
+            Vector3 pos = point.transform.position;
+            bool occupied = false;
+            foreach (var spawned in _spawnedPlayers.Values)
+            {
+                if (spawned == null) continue;
+                if (Vector3.Distance(spawned.transform.position, pos) < checkRadius)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (!occupied) return pos;
+        }
+
+        // Fallback: tất cả đều bị chiếm thì random bình thường
+        return shuffled[Random.Range(0, shuffled.Count)].transform.position;
     }
 }

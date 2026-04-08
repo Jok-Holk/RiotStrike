@@ -5,8 +5,7 @@ using UnityEngine;
 public class InputProvider : MonoBehaviour, INetworkRunnerCallbacks
 {
     public NetworkInputData _input;
-    private bool _jumpPressed;
-    private bool _crouching;
+    private bool      _crouching;
     private FPSCamera _fpsCamera;
 
     public void SetCamera(FPSCamera cam) => _fpsCamera = cam;
@@ -18,24 +17,27 @@ public class InputProvider : MonoBehaviour, INetworkRunnerCallbacks
             Input.GetAxisRaw("Vertical")
         );
 
-        // Không cần LookDelta nữa, camera tự xử lý trong Update()
         _input.LookDelta = Vector2.zero;
-        _input.Yaw = _fpsCamera != null ? _fpsCamera.Yaw : 0f;
+        _input.Yaw       = _fpsCamera != null ? _fpsCamera.Yaw : 0f;
 
-        if (Input.GetKeyDown(KeyCode.Space)) _jumpPressed = true;
         if (Input.GetKeyDown(KeyCode.LeftControl)) _crouching = !_crouching;
 
-        _input.Jump = _jumpPressed;
-        _input.Crouch = _crouching;
-        _input.Sprint = Input.GetKey(KeyCode.LeftShift);
-        _input.Fire = Input.GetMouseButton(0);
-        _input.Reload = Input.GetKeyDown(KeyCode.R);
+        _input.Crouch        = _crouching;
+        _input.Sprint        = Input.GetKey(KeyCode.LeftShift);
+        _input.Fire          = Input.GetMouseButton(0);
+        _input.Reload        = Input.GetKeyDown(KeyCode.R);
+        _input.SwitchToRifle  = Input.GetKeyDown(KeyCode.Alpha1); // phím 1 = Rifle
+        _input.SwitchToPistol = Input.GetKeyDown(KeyCode.Alpha2); // phím 2 = Pistol
+        // Jump đã bỏ
     }
 
     public void OnInput(NetworkRunner runner, NetworkInput input)
     {
         input.Set(_input);
-        _jumpPressed = false;
+        // Reset one-frame inputs
+        _input.SwitchToPistol = false;
+        _input.SwitchToRifle  = false;
+        _input.Reload         = false;
     }
 
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }

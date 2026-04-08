@@ -2,7 +2,6 @@ using UnityEngine;
 
 public class ScoreboardToggle : MonoBehaviour
 {
-
     [SerializeField] private GameObject scoreboardPanel;
 
     void Update()
