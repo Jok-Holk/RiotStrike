@@ -1249,7 +1249,8 @@ namespace Fusion.Editor
 
 #if UNITY_EDITOR
   [CustomPropertyDrawer(typeof(NormalizedRectAttribute))]
-  public class NormalizedRectAttributeDrawer : PropertyDrawer {
+  public class NormalizedRectAttributeDrawer : PropertyDrawer
+  {
 
     bool isDragNewRect;
     bool isDragXMin, isDragXMax, isDragYMin, isDragYMax, isDragAll;
@@ -1262,15 +1263,20 @@ namespace Fusion.Editor
     const float EXPANDED_HEIGHT = 140;
     const float COLLAPSE_HEIGHT = 48;
 
-    public override float GetPropertyHeight(SerializedProperty property, GUIContent label) {
-      if (property.propertyType == SerializedPropertyType.Rect) {
+    public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+    {
+      if (property.propertyType == SerializedPropertyType.Rect)
+      {
         return property.isExpanded ? EXPANDED_HEIGHT : COLLAPSE_HEIGHT;
-      } else {
+      }
+      else
+      {
         return base.GetPropertyHeight(property, label);
       }
     }
 
-    public override void OnGUI(Rect position, SerializedProperty property, GUIContent label) {
+    public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+    {
 
       EditorGUI.BeginProperty(position, label, property);
 
@@ -1280,9 +1286,11 @@ namespace Fusion.Editor
 
       var value = property.rectValue;
 
-      if (property.propertyType == SerializedPropertyType.Rect) {
+      if (property.propertyType == SerializedPropertyType.Rect)
+      {
 
-        var dragarea = new Rect(position) {
+        var dragarea = new Rect(position)
+        {
           yMin = position.yMin + 16 + 3,
           yMax = position.yMax - 2,
           //xMin = position.xMin + 16,
@@ -1302,16 +1310,19 @@ namespace Fusion.Editor
         dragarea.yMax -= border;
 
         // Reshape the inner box to the correct aspect ratio
-        if (isExpanded) {
+        if (isExpanded)
+        {
           var ratio = (attribute as NormalizedRectAttribute).AspectRatio;
-          if (ratio == 0) {
+          if (ratio == 0)
+          {
             var currentRes = UnityEditor.Handles.GetMainGameViewSize();
             ratio = currentRes.x / currentRes.y;
           }
 
           // Don't go any wider than the inspector box.
           var width = (dragarea.height * ratio);
-          if (width < dragarea.width) {
+          if (width < dragarea.width)
+          {
             var x = (dragarea.width - width) / 2;
             dragarea.x = dragarea.xMin + (int)x;
             dragarea.width = (int)(width);
@@ -1325,29 +1336,33 @@ namespace Fusion.Editor
         var invertY = (attribute as NormalizedRectAttribute).InvertY;
 
         Event e = Event.current;
-        
+
         const int HANDLE_SIZE = 8;
 
         var normmin = new Vector2(value.xMin, invertY ? 1f - value.yMin : value.yMin);
         var normmax = new Vector2(value.xMax, invertY ? 1f - value.yMax : value.yMax);
         var minreal = Rect.NormalizedToPoint(dragarea, normmin);
         var maxreal = Rect.NormalizedToPoint(dragarea, normmax);
-        var lowerleftrect = new Rect(minreal.x              , minreal.y - (invertY ? HANDLE_SIZE : 0), HANDLE_SIZE, HANDLE_SIZE);
+        var lowerleftrect = new Rect(minreal.x, minreal.y - (invertY ? HANDLE_SIZE : 0), HANDLE_SIZE, HANDLE_SIZE);
         var upperrghtrect = new Rect(maxreal.x - HANDLE_SIZE, maxreal.y - (invertY ? 0 : HANDLE_SIZE), HANDLE_SIZE, HANDLE_SIZE);
-        var upperleftrect = new Rect(minreal.x              , maxreal.y - (invertY ? 0 : HANDLE_SIZE), HANDLE_SIZE, HANDLE_SIZE);
+        var upperleftrect = new Rect(minreal.x, maxreal.y - (invertY ? 0 : HANDLE_SIZE), HANDLE_SIZE, HANDLE_SIZE);
         var lowerrghtrect = new Rect(maxreal.x - HANDLE_SIZE, minreal.y - (invertY ? HANDLE_SIZE : 0), HANDLE_SIZE, HANDLE_SIZE);
 
         var currentrect = Rect.MinMaxRect(minreal.x, invertY ? maxreal.y : minreal.y, maxreal.x, invertY ? minreal.y : maxreal.y);
 
-        if (lockCursorStyle == MouseCursor.Arrow) {
-          if (isExpanded) {
+        if (lockCursorStyle == MouseCursor.Arrow)
+        {
+          if (isExpanded)
+          {
             EditorGUIUtility.AddCursorRect(lowerleftrect, MouseCursor.Link);
             EditorGUIUtility.AddCursorRect(upperrghtrect, MouseCursor.Link);
             EditorGUIUtility.AddCursorRect(upperleftrect, MouseCursor.Link);
             EditorGUIUtility.AddCursorRect(lowerrghtrect, MouseCursor.Link);
           }
           EditorGUIUtility.AddCursorRect(currentrect, MouseCursor.MoveArrow);
-        } else {
+        }
+        else
+        {
           // Lock cursor to a style while dragging, otherwise the slow inspector update causes rapid mouse icon changes.
           EditorGUIUtility.AddCursorRect(dragarea, lockCursorStyle);
         }
@@ -1358,63 +1373,82 @@ namespace Fusion.Editor
         EditorGUI.DrawRect(lowerrghtrect, Color.yellow);
 
         var mousepos = e.mousePosition;
-        if (e.button == 0) {
-          if (e.type == EventType.MouseUp) {
+        if (e.button == 0)
+        {
+          if (e.type == EventType.MouseUp)
+          {
             isDragXMin = false;
             isDragYMin = false;
             isDragXMax = false;
             isDragYMax = false;
-            isDragAll  = false;
+            isDragAll = false;
             lockCursorStyle = MouseCursor.Arrow;
-            isDragNewRect   = false;
+            isDragNewRect = false;
 
             hasChanged = true;
           }
 
-          if (e.type == EventType.MouseDown ) {
-            if (isExpanded && lowerleftrect.Contains(mousepos)) {
+          if (e.type == EventType.MouseDown)
+          {
+            if (isExpanded && lowerleftrect.Contains(mousepos))
+            {
               isDragXMin = true;
               isDragYMin = true;
               lockCursorStyle = MouseCursor.Link;
-            } else if (isExpanded && upperrghtrect.Contains(mousepos)) {
+            }
+            else if (isExpanded && upperrghtrect.Contains(mousepos))
+            {
               isDragXMax = true;
               isDragYMax = true;
               lockCursorStyle = MouseCursor.Link;
-            } else if (isExpanded && upperleftrect.Contains(mousepos)) {
+            }
+            else if (isExpanded && upperleftrect.Contains(mousepos))
+            {
               isDragXMin = true;
               isDragYMax = true;
               lockCursorStyle = MouseCursor.Link;
-            } else if (isExpanded && lowerrghtrect.Contains(mousepos)) {
+            }
+            else if (isExpanded && lowerrghtrect.Contains(mousepos))
+            {
               isDragXMax = true;
               isDragYMin = true;
               lockCursorStyle = MouseCursor.Link;
-            } else if (currentrect.Contains(mousepos)) {
+            }
+            else if (currentrect.Contains(mousepos))
+            {
               isDragAll = true;
               // mouse start is stored as a normalized offset from the Min values.
               mouseDownStart = Rect.PointToNormalized(dragarea, mousepos) - normmin;
               lockCursorStyle = MouseCursor.MoveArrow;
-            } else if (isExpanded && dragarea.Contains(mousepos)) {
+            }
+            else if (isExpanded && dragarea.Contains(mousepos))
+            {
               mouseDownStart = mousepos;
               isDragNewRect = true;
             }
           }
         }
 
-        if (e.type == EventType.MouseDrag) {
+        if (e.type == EventType.MouseDrag)
+        {
 
           Rect rect;
-          if (isDragNewRect) {
+          if (isDragNewRect)
+          {
             var start = Rect.PointToNormalized(dragarea, mouseDownStart);
             var end = Rect.PointToNormalized(dragarea, e.mousePosition);
 
-            if (invertY) {
+            if (invertY)
+            {
               rect = Rect.MinMaxRect(
-                  Math.Max(0f,      Math.Min(start.x, end.x)),
+                  Math.Max(0f, Math.Min(start.x, end.x)),
                   Math.Max(0f, 1f - Math.Max(start.y, end.y)),
-                  Math.Min(1f,      Math.Max(start.x, end.x)),
+                  Math.Min(1f, Math.Max(start.x, end.x)),
                   Math.Min(1f, 1f - Math.Min(start.y, end.y))
                   );
-            } else {
+            }
+            else
+            {
               rect = Rect.MinMaxRect(
                   Math.Max(0f, Math.Min(start.x, end.x)),
                   Math.Max(0f, Math.Min(start.y, end.y)),
@@ -1426,36 +1460,46 @@ namespace Fusion.Editor
             hasChanged = true;
 
 
-          } else if (isDragAll){
+          }
+          else if (isDragAll)
+          {
             var normmouse = Rect.PointToNormalized(dragarea, e.mousePosition);
-            rect = new Rect(value) {
+            rect = new Rect(value)
+            {
               x = Math.Max(normmouse.x - mouseDownStart.x, 0),
               y = Math.Max(invertY ? (1 - normmouse.y + mouseDownStart.y) : (normmouse.y - mouseDownStart.y), 0)
             };
 
-            if (rect.xMax > 1) {
-              rect = new Rect(rect) { x = rect.x + (1f - rect.xMax)};
+            if (rect.xMax > 1)
+            {
+              rect = new Rect(rect) { x = rect.x + (1f - rect.xMax) };
             }
-            if (rect.yMax > 1) {
+            if (rect.yMax > 1)
+            {
               rect = new Rect(rect) { y = rect.y + (1f - rect.yMax) };
             }
 
             property.rectValue = rect;
             hasChanged = true;
 
-          } else if (isDragXMin || isDragXMax || isDragYMin || isDragYMax) {
+          }
+          else if (isDragXMin || isDragXMax || isDragYMin || isDragYMax)
+          {
 
             const float VERT_HANDLE_MIN_DIST = .2f;
             const float HORZ_HANDLE_MIN_DIST = .05f;
             var normmouse = Rect.PointToNormalized(dragarea, e.mousePosition);
-            if (invertY) {
+            if (invertY)
+            {
               rect = Rect.MinMaxRect(
-                isDragXMin ? Math.Min(     normmouse.x, value.xMax - HORZ_HANDLE_MIN_DIST) : value.xMin,
+                isDragXMin ? Math.Min(normmouse.x, value.xMax - HORZ_HANDLE_MIN_DIST) : value.xMin,
                 isDragYMin ? Math.Min(1f - normmouse.y, value.yMax - VERT_HANDLE_MIN_DIST) : value.yMin,
-                isDragXMax ? Math.Max(     normmouse.x, value.xMin + HORZ_HANDLE_MIN_DIST) : value.xMax,
-                isDragYMax ? Math.Max(1f - normmouse.y, value.yMin + VERT_HANDLE_MIN_DIST) : value.yMax 
+                isDragXMax ? Math.Max(normmouse.x, value.xMin + HORZ_HANDLE_MIN_DIST) : value.xMax,
+                isDragYMax ? Math.Max(1f - normmouse.y, value.yMin + VERT_HANDLE_MIN_DIST) : value.yMax
                 );
-            } else {
+            }
+            else
+            {
               rect = Rect.MinMaxRect(
                 isDragXMin ? Math.Min(normmouse.x, value.xMax - HORZ_HANDLE_MIN_DIST) : value.xMin,
                 isDragYMin ? Math.Min(normmouse.y, value.yMax - VERT_HANDLE_MIN_DIST) : value.yMin,
@@ -1476,11 +1520,12 @@ namespace Fusion.Editor
         bool useCompact = position.width < COMPACT_THRESHOLD;
 
         var labelwidth = EditorGUIUtility.labelWidth;
-        var fieldwidth = (position.width - labelwidth- 3 * SPACING) * 0.25f ;
+        var fieldwidth = (position.width - labelwidth - 3 * SPACING) * 0.25f;
         var fieldbase = new Rect(position) { xMin = position.xMin + labelwidth, height = 16, width = fieldwidth - (useCompact ? 0 : LABELS_WIDTH) };
-        
-        if (_compactValueStyle == null) {
-          _compactLabelStyle = new GUIStyle(EditorStyles.miniLabel)     { fontSize = 9, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(2, 0, 1, 0) };
+
+        if (_compactValueStyle == null)
+        {
+          _compactLabelStyle = new GUIStyle(EditorStyles.miniLabel) { fontSize = 9, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(2, 0, 1, 0) };
           _compactValueStyle = new GUIStyle(EditorStyles.miniTextField) { fontSize = 9, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(2, 0, 1, 0) };
         }
         GUIStyle valueStyle = _compactValueStyle;
@@ -1495,7 +1540,8 @@ namespace Fusion.Editor
         //}
 
         // Only draw labels when not in compact
-        if (!useCompact) {
+        if (!useCompact)
+        {
           Rect l1 = new Rect(fieldbase) { x = fieldbase.xMin };
           Rect l2 = new Rect(fieldbase) { x = fieldbase.xMin + 1 * (fieldwidth + SPACING) };
           Rect l3 = new Rect(fieldbase) { x = fieldbase.xMin + 2 * (fieldwidth + SPACING) };
@@ -1512,21 +1558,26 @@ namespace Fusion.Editor
         Rect f3 = new Rect(fieldbase) { x = fieldbase.xMin + 2 * fieldwidth + (useCompact ? 0 : LABELS_WIDTH) + 2 * SPACING };
         Rect f4 = new Rect(fieldbase) { x = fieldbase.xMin + 3 * fieldwidth + (useCompact ? 0 : LABELS_WIDTH) + 3 * SPACING };
 
-        using (var check = new EditorGUI.ChangeCheckScope()) {
+        using (var check = new EditorGUI.ChangeCheckScope())
+        {
           float newxmin, newxmax, newymin, newymax;
-          if (invertY) {
+          if (invertY)
+          {
             newxmin = EditorGUI.DelayedFloatField(f1, (float)Math.Round(value.xMin, useCompact ? 2 : 3), valueStyle);
             newxmax = EditorGUI.DelayedFloatField(f2, (float)Math.Round(value.xMax, useCompact ? 2 : 3), valueStyle);
             newymax = EditorGUI.DelayedFloatField(f3, (float)Math.Round(value.yMax, useCompact ? 2 : 3), valueStyle);
             newymin = EditorGUI.DelayedFloatField(f4, (float)Math.Round(value.yMin, useCompact ? 2 : 3), valueStyle);
-          } else {
+          }
+          else
+          {
             newxmin = EditorGUI.DelayedFloatField(f1, (float)Math.Round(value.xMin, useCompact ? 2 : 3), valueStyle);
             newxmax = EditorGUI.DelayedFloatField(f2, (float)Math.Round(value.xMax, useCompact ? 2 : 3), valueStyle);
             newymin = EditorGUI.DelayedFloatField(f3, (float)Math.Round(value.yMin, useCompact ? 2 : 3), valueStyle);
             newymax = EditorGUI.DelayedFloatField(f4, (float)Math.Round(value.yMax, useCompact ? 2 : 3), valueStyle);
           }
 
-          if (check.changed) {
+          if (check.changed)
+          {
             if (newxmin != value.xMin) value.xMin = Math.Min(newxmin, value.xMax - .05f);
             if (newxmax != value.xMax) value.xMax = Math.Max(newxmax, value.xMin + .05f);
             if (newymax != value.yMax) value.yMax = Math.Max(newymax, value.yMin + .05f);
@@ -1546,15 +1597,18 @@ namespace Fusion.Editor
         //GUI.DrawTexture(area, GUIContent.none, EditorStyles.helpBox);
         //GUI.Box(area, GUIContent.none, EditorStyles.helpBox);
 
-      } else {
+      }
+      else
+      {
         Debug.LogWarning($"{nameof(NormalizedRectAttribute)} only valid on UnityEngine.Rect fields. Will use default rendering for '{property.type} {property.name}' in class '{fieldInfo.DeclaringType}'.");
         EditorGUI.PropertyField(position, property, label);
       }
 
-      if (hasChanged) {
+      if (hasChanged)
+      {
         GUI.changed = true;
         property.serializedObject.ApplyModifiedProperties();
-       }
+      }
 
       EditorGUI.EndProperty();
     }
@@ -2277,7 +2331,8 @@ namespace Fusion.Editor
   static class HierarchyIteratorExtensions
   {
 #if UNITY_6000_3_OR_NEWER
-    public static EntityId GetObjectId(this HierarchyIterator iterator) {
+    public static EntityId GetObjectId(this HierarchyIterator iterator)
+    {
       return iterator.entityId;
     }
 #else
@@ -2288,9 +2343,10 @@ namespace Fusion.Editor
 #endif
 
 #if UNITY_6000_2_OR_NEWER
-    public static GUID GetAssetGuid(this HierarchyIterator iterator) {
+    public static GUID GetAssetGuid(this HierarchyIterator iterator)
+    {
       return iterator.assetGUID;
-    }    
+    }
 #else
     public static GUID GetAssetGuid(this HierarchyIterator iterator)
     {
@@ -2314,7 +2370,8 @@ namespace Fusion.Editor
   static class LazyLoadReferenceExtensions
   {
 #if UNITY_6000_3_OR_NEWER
-    public static EntityId GetObjectId<T>(this LazyLoadReference<T> obj) where T : Object {
+    public static EntityId GetObjectId<T>(this LazyLoadReference<T> obj) where T : Object
+    {
       return obj.entityId;
     }
 #else
@@ -2339,7 +2396,8 @@ namespace Fusion.Editor
   static class ObjectExtensions
   {
 #if UNITY_6000_3_OR_NEWER
-    public static EntityId GetObjectId(this UnityEngine.Object obj) {
+    public static EntityId GetObjectId(this UnityEngine.Object obj)
+    {
       return obj.GetEntityId();
     }
 #else
@@ -8647,12 +8705,14 @@ namespace Fusion.Editor
     }
 
 #if UNITY_EDITOR
-    
-    public static T CreateEditorMethodDelegate<T>(string editorAssemblyTypeName, string methodName, BindingFlags flags) where T : Delegate {
+
+    public static T CreateEditorMethodDelegate<T>(string editorAssemblyTypeName, string methodName, BindingFlags flags) where T : Delegate
+    {
       return CreateMethodDelegate<T>(typeof(Editor).Assembly, editorAssemblyTypeName, methodName, flags);
     }
 
-    public static Delegate CreateEditorMethodDelegate(string editorAssemblyTypeName, string methodName, BindingFlags flags, Type delegateType) {
+    public static Delegate CreateEditorMethodDelegate(string editorAssemblyTypeName, string methodName, BindingFlags flags, Type delegateType)
+    {
       return CreateMethodDelegate(typeof(Editor).Assembly, editorAssemblyTypeName, methodName, flags, delegateType);
     }
 
@@ -9222,7 +9282,7 @@ namespace Fusion.Editor
       private static readonly Type InternalSetValueFuncType = InternalType?.GetNestedTypeOrThrow(nameof(SetValueFunc), BindingFlags.Public);
 
 #if UNITY_2023_1_OR_NEWER
-      private static readonly Delegate _Draw = InternalType?.CreateMethodDelegate(nameof(Draw), BindingFlags.Public | BindingFlags.Static, 
+      private static readonly Delegate _Draw = InternalType?.CreateMethodDelegate(nameof(Draw), BindingFlags.Public | BindingFlags.Static,
         typeof(Action<,,>).MakeGenericType(
           typeof(GUIContent), InternalGetValueFuncType, InternalSetValueFuncType)
       );
@@ -9312,7 +9372,7 @@ namespace Fusion.Editor
     {
 #if UNITY_6000_3_OR_NEWER
       public delegate void CopySearchFilterFromDelegate(UnityEditor.HierarchyIterator to, UnityEditor.HierarchyIterator from);
-      public static CopySearchFilterFromDelegate CopySearchFilterFrom = typeof(UnityEditor.HierarchyIterator).CreateMethodDelegate<CopySearchFilterFromDelegate>(nameof(CopySearchFilterFrom), 
+      public static CopySearchFilterFromDelegate CopySearchFilterFrom = typeof(UnityEditor.HierarchyIterator).CreateMethodDelegate<CopySearchFilterFromDelegate>(nameof(CopySearchFilterFrom),
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 #else
       public delegate void CopySearchFilterFromDelegate(UnityEditor.HierarchyProperty to, UnityEditor.HierarchyProperty from);
@@ -14441,17 +14501,20 @@ namespace Fusion.Editor
   using UnityEngine;
   using UnityEngine.UI;
 
-  public partial class FusionHubWindow {
+  public partial class FusionHubWindow
+  {
     /// <summary>
     /// Section Definition.
     /// </summary>
-    internal class Section {
+    internal class Section
+    {
       public string Title;
       public string Description;
       public Action DrawMethod;
       public Icon Icon;
 
-      public Section(string title, string description, Action drawMethod, Icon icon) {
+      public Section(string title, string description, Action drawMethod, Icon icon)
+      {
         Title = title;
         Description = description;
         DrawMethod = drawMethod;
@@ -14459,7 +14522,8 @@ namespace Fusion.Editor
       }
     }
 
-    public enum Icon {
+    public enum Icon
+    {
       Setup,
       Documentation,
       Samples,
@@ -14469,7 +14533,8 @@ namespace Fusion.Editor
       FusionIcon,
     }
 
-    private static class Constants {
+    private static class Constants
+    {
       public const string UrlFusionDocsOnline = "https://doc.photonengine.com/fusion/v2/";
       public const string UrlFusionIntro = "https://doc.photonengine.com/fusion/v2/getting-started/fusion-introduction";
       public const string UrlFusionSDK = "https://doc.photonengine.com/fusion/v2/getting-started/sdk-download";
@@ -14520,8 +14585,10 @@ namespace Fusion.Editor
     public Texture2D FusionIcon;
     public Texture2D CorrectIcon;
 
-    private Texture2D GetIcon(Icon icon) {
-      switch (icon) {
+    private Texture2D GetIcon(Icon icon)
+    {
+      switch (icon)
+      {
         case Icon.Setup: return SetupIcon;
         case Icon.Documentation: return DocumentationIcon;
         case Icon.Samples: return SamplesIcon;
@@ -14553,8 +14620,10 @@ namespace Fusion.Editor
     private static GUIStyle headerTextStyle;
     private static GUIStyle buttonActiveStyle;
 
-    private bool InitContent() {
-      if (_ready.HasValue && _ready.Value) {
+    private bool InitContent()
+    {
+      if (_ready.HasValue && _ready.Value)
+      {
         return _ready.Value;
       }
 
@@ -14592,9 +14661,12 @@ namespace Fusion.Editor
       return (_ready = true).Value;
     }
 
-    private static Action OpenURL(string url, params object[] args) {
-      return () => {
-        if (args.Length > 0) {
+    private static Action OpenURL(string url, params object[] args)
+    {
+      return () =>
+      {
+        if (args.Length > 0)
+        {
           url = string.Format(url, args);
         }
 
@@ -14602,8 +14674,10 @@ namespace Fusion.Editor
       };
     }
 
-    protected static bool IsAppIdValid() {
-      if (PhotonAppSettings.TryGetGlobal(out var global) && Guid.TryParse(global.AppSettings.AppIdFusion, out var guid)) {
+    protected static bool IsAppIdValid()
+    {
+      if (PhotonAppSettings.TryGetGlobal(out var global) && Guid.TryParse(global.AppSettings.AppIdFusion, out var guid))
+      {
         return true;
       }
 
@@ -14612,7 +14686,8 @@ namespace Fusion.Editor
 
     static string titleVersionReformat, sectionReformat, header1Reformat, header2Reformat, header3Reformat, classReformat;
 
-    void InitializeFormatters() {
+    void InitializeFormatters()
+    {
       titleVersionReformat = "<size=22><color=white>$1</color></size>";
       sectionReformat = "<i><color=lightblue>$1</color></i>";
       header1Reformat = "<size=22><color=white>$1</color></size>";
@@ -14624,14 +14699,17 @@ namespace Fusion.Editor
     /// <summary>
     /// Converts readme files into Unity RichText.
     /// </summary>
-    private void PrepareReleaseHistoryText() {
-      if (sectionReformat == null || sectionReformat == "") {
+    private void PrepareReleaseHistoryText()
+    {
+      if (sectionReformat == null || sectionReformat == "")
+      {
         InitializeFormatters();
       }
 
       // Fusion
       {
-        try {
+        try
+        {
           var filePath = BuildPath(Application.dataPath, "Photon", "Fusion", "release_history.txt");
           var text = (TextAsset)AssetDatabase.LoadAssetAtPath(filePath, typeof(TextAsset));
           var baseText = text.text;
@@ -14649,14 +14727,17 @@ namespace Fusion.Editor
           baseText = Regex.Replace(baseText, @"\`([^\`]*)\`", classReformat);
 
           fusionReleaseHistory = baseText;
-        } catch {
+        }
+        catch
+        {
           fusionReleaseHistory = "Unable to load Release History.";
         }
       }
 
       // Realtime
       {
-        try {
+        try
+        {
           var filePath = BuildPath(Application.dataPath, "Photon", "PhotonRealtime", "Code", "changes-realtime.txt");
 
           var text = (TextAsset)AssetDatabase.LoadAssetAtPath(filePath, typeof(TextAsset));
@@ -14673,14 +14754,18 @@ namespace Fusion.Editor
 
           var matches = regexVersion.Matches(baseText);
 
-          if (matches.Count > 0) {
+          if (matches.Count > 0)
+          {
             var currentVersionMatch = matches[0];
             var lastVersionMatch = currentVersionMatch.NextMatch();
 
-            if (currentVersionMatch.Success && lastVersionMatch.Success) {
-              Func<MatchCollection, List<string>> itemProcessor = (match) => {
+            if (currentVersionMatch.Success && lastVersionMatch.Success)
+            {
+              Func<MatchCollection, List<string>> itemProcessor = (match) =>
+              {
                 List<string> resultList = new List<string>();
-                for (int index = 0; index < match.Count; index++) {
+                for (int index = 0; index < match.Count; index++)
+                {
                   resultList.Add(match[index].Groups[2].Value.Trim());
                 }
 
@@ -14699,7 +14784,9 @@ namespace Fusion.Editor
               releaseHistoryTextInternal = itemProcessor(regexInternal.Matches(mainText));
             }
           }
-        } catch {
+        }
+        catch
+        {
           releaseHistoryHeader = "\nPlease look the file changes-realtime.txt";
           releaseHistoryTextAdded = new List<string>();
           releaseHistoryTextChanged = new List<string>();
@@ -14710,16 +14797,19 @@ namespace Fusion.Editor
       }
     }
 
-    public static bool Toggle(bool value) {
+    public static bool Toggle(bool value)
+    {
       var toggle = new GUIStyle("Toggle") { margin = new RectOffset(), padding = new RectOffset() };
 
       return EditorGUILayout.Toggle(value, toggle, GUILayout.Width(15));
     }
 
-    private static string BuildPath(params string[] parts) {
+    private static string BuildPath(params string[] parts)
+    {
       var basePath = "";
 
-      foreach (var path in parts) {
+      foreach (var path in parts)
+      {
         basePath = Path.Combine(basePath, path);
       }
 
@@ -15932,7 +16022,8 @@ namespace Fusion.Editor
         if (needsBaking)
         {
 #if UNITY_2023_1_OR_NEWER || UNITY_2022_3_OR_NEWER
-          if (Array.IndexOf(movedAssets, path) >= 0) {
+          if (Array.IndexOf(movedAssets, path) >= 0)
+          {
             // attempting to bake a prefab that has been moved would hang the editor
             // https://issuetracker.unity3d.com/issues/editor-freezes-when-prefabutility-dot-loadprefabcontents-is-called-in-assetpostprocessor-dot-onpostprocessallassets-for-a-moved-prefab
             continue;
