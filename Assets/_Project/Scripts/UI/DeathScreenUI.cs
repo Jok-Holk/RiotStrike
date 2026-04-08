@@ -1,10 +1,8 @@
-using UnityEngine;              // cho MonoBehaviour, GameObject, SerializeField
-using TMPro;                    // cho TextMeshProUGUI
+                  // cho TextMeshProUGUI
 using UnityEngine;
 using TMPro;
 using System.Collections;
-
-using System.Collections;       // cho IEnumerator
+  // cho IEnumerator
 
 public class DeathScreenUI : MonoBehaviour
 {
