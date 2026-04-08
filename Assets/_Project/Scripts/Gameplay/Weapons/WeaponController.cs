@@ -23,6 +23,9 @@ public class WeaponController : NetworkBehaviour
     [SerializeField] private GameObject muzzleFlashVFX;
     [SerializeField] private Camera     fpsCamera;
 
+    [Header("Raycast Settings")]
+    [SerializeField] private LayerMask shootableMask; // thêm mask để kiểm soát raycast
+
     [Networked] public int        CurrentAmmo     { get; set; }
     [Networked] public int        ReserveAmmo     { get; set; }
     [Networked] public bool       IsRifleUnlocked { get; set; }
@@ -56,7 +59,6 @@ public class WeaponController : NetworkBehaviour
     {
         if (!Object.HasInputAuthority) return;
 
-        // Equip lần đầu khi TeamID sync về
         if (!_equipped && TeamID != _lastTeamID)
         {
             _lastTeamID = TeamID;
@@ -64,7 +66,6 @@ public class WeaponController : NetworkBehaviour
             EquipPistol();
         }
 
-        // Auto switch sang rifle khi phase unlock
         if (IsRifleUnlocked && !_lastRifleUnlocked)
         {
             _lastRifleUnlocked = true;
@@ -92,7 +93,7 @@ public class WeaponController : NetworkBehaviour
 
     public void EquipRifle()
     {
-        if (!IsRifleUnlocked) return; // guard — không equip nếu chưa unlock
+        if (!IsRifleUnlocked) return;
 
         bool isAK         = TeamID == 0;
         _currentWeapon    = isAK ? ak47Data     : m4a1Data;
@@ -124,13 +125,11 @@ public class WeaponController : NetworkBehaviour
         if (!GetInput(out NetworkInputData input)) return;
         if (_currentWeapon == null) return;
 
-        // Switch weapon — chỉ cho phép nếu rifle đã unlock
         if (input.SwitchToRifle && IsRifleUnlocked && _currentSlot != 1)
             EquipRifle();
         if (input.SwitchToPistol && _currentSlot != 0)
             EquipPistol();
 
-        // Reload complete
         if (_reloadTimer.Expired(Runner))
         {
             _reloadTimer = default;
@@ -142,8 +141,6 @@ public class WeaponController : NetworkBehaviour
 
         bool isReloading = !_reloadTimer.ExpiredOrNotRunning(Runner);
 
-        // Fire
-        // Lock bắn khi trong safe zone hoặc chưa bắt đầu game
         bool canFire = SafeZoneManager.instance == null || SafeZoneManager.instance.CanFire();
 
         if (canFire && input.Fire && _fireTimer.ExpiredOrNotRunning(Runner)
@@ -153,7 +150,6 @@ public class WeaponController : NetworkBehaviour
             _fireTimer = TickTimer.CreateFromSeconds(Runner, 1f / _currentWeapon.fireRate);
         }
 
-        // Reload
         if (input.Reload && _reloadTimer.ExpiredOrNotRunning(Runner)
             && CurrentAmmo < _currentWeapon.magazineSize && ReserveAmmo > 0)
         {
@@ -181,9 +177,11 @@ public class WeaponController : NetworkBehaviour
         if (cam == null) return;
 
         var ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2f, Screen.height / 2f));
-        if (Physics.Raycast(ray, out RaycastHit hit, _currentWeapon.range))
+        if (Physics.Raycast(ray, out RaycastHit hit, _currentWeapon.range, shootableMask))
         {
             Debug.DrawLine(ray.origin, hit.point, Color.red, 1f);
+            Debug.Log($"Raycast hit {hit.collider.name} on layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+
             var health = hit.collider.GetComponentInParent<PlayerHealth>();
             if (health != null)
             {
@@ -192,7 +190,6 @@ public class WeaponController : NetworkBehaviour
                     ? _currentWeapon.damage * _currentWeapon.headshotMultiplier
                     : _currentWeapon.damage;
 
-                // Pass killerRef để GameManager track kill
                 RPC_ApplyDamage(health.Object, dmg, Runner.LocalPlayer);
             }
         }
