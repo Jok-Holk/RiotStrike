@@ -1,12 +1,7 @@
 ﻿<Solution>
   <Project Path="Fusion.Unity.Editor.csproj" />
-<<<<<<< HEAD
-  <Project Path="Assembly-CSharp-Editor.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
-=======
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
->>>>>>> origin/origin/Weapon-System
   <Project Path="Fusion.Unity.csproj" />
   <Project Path="Unity.Fusion.CodeGen.csproj" />
 </Solution>

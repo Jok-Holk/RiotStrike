@@ -12,10 +12,10 @@ public class SafeZoneManager : NetworkBehaviour
     private GameObject[] _barriersA;
     private GameObject[] _barriersB;
 
-    private bool _localStarted     = false;
+    private bool _localStarted      = false;
     private bool _localLeftSafeZone = false;
-    private bool _isInSafeZone     = true;
-    private int  _localTeam        = -1;
+    private bool _isInSafeZone      = true;
+    private int  _localTeam         = -1;
 
     // Layer names
     const string LAYER_BARRIER_A = "BarrierA";
@@ -47,6 +47,14 @@ public class SafeZoneManager : NetworkBehaviour
     {
         int layerA = LayerMask.NameToLayer(LAYER_BARRIER_A);
         int layerB = LayerMask.NameToLayer(LAYER_BARRIER_B);
+
+        Debug.Log($"[SafeZone] BarrierA layer={layerA}, BarrierB layer={layerB}");
+
+        if (layerA == -1 || layerB == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layers chưa được tạo hoặc tên không khớp!");
+            return;
+        }
 
         foreach (var b in _barriersA)
             if (b != null) b.layer = layerA;
@@ -89,6 +97,15 @@ public class SafeZoneManager : NetworkBehaviour
             int layer = _localTeam == 0
                 ? LayerMask.NameToLayer(LAYER_TEAM_A)
                 : LayerMask.NameToLayer(LAYER_TEAM_B);
+
+            Debug.Log($"[SafeZone] Local player team={_localTeam}, layer={layer}");
+
+            if (layer == -1)
+            {
+                Debug.LogError("[SafeZone] Team layer chưa được tạo hoặc tên không khớp!");
+                return;
+            }
+
             SetLayerRecursive(fps.gameObject, layer);
             break;
         }
@@ -99,11 +116,17 @@ public class SafeZoneManager : NetworkBehaviour
         var cam = Camera.main;
         if (cam == null) return;
 
-        // Ẩn barrier team mình khỏi camera — team A không thấy BarrierA
         string myBarrierLayer = _localTeam == 0 ? LAYER_BARRIER_A : LAYER_BARRIER_B;
-        int myBarrierMask     = 1 << LayerMask.NameToLayer(myBarrierLayer);
+        int layerIndex = LayerMask.NameToLayer(myBarrierLayer);
 
-        // Bỏ layer barrier team mình khỏi culling mask
+        if (layerIndex == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layer chưa được tạo hoặc tên không khớp!");
+            return;
+        }
+
+        int myBarrierMask = 1 << layerIndex;
+
         cam.cullingMask &= ~myBarrierMask;
 
         Debug.Log($"[SafeZone] Camera culling set, team={_localTeam}, hidden layer={myBarrierLayer}");
@@ -111,13 +134,19 @@ public class SafeZoneManager : NetworkBehaviour
 
     void ShowMyBarrierOnCamera()
     {
-        // Khi ra khỏi safe zone → thêm lại barrier team mình vào culling mask
-        // (thấy tường của mình từ ngoài — nhưng không đi vào được)
         var cam = Camera.main;
         if (cam == null) return;
 
         string myBarrierLayer = _localTeam == 0 ? LAYER_BARRIER_A : LAYER_BARRIER_B;
-        int myBarrierMask     = 1 << LayerMask.NameToLayer(myBarrierLayer);
+        int layerIndex = LayerMask.NameToLayer(myBarrierLayer);
+
+        if (layerIndex == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layer chưa được tạo hoặc tên không khớp!");
+            return;
+        }
+
+        int myBarrierMask = 1 << layerIndex;
         cam.cullingMask |= myBarrierMask;
 
         Debug.Log($"[SafeZone] Barrier visible again after leaving safe zone");
@@ -138,7 +167,6 @@ public class SafeZoneManager : NetworkBehaviour
 
     public override void Render()
     {
-        // Hết countdown — game bắt đầu
         if (GameStarted && !_localStarted && _localTeam >= 0)
         {
             _localStarted = true;
@@ -146,33 +174,29 @@ public class SafeZoneManager : NetworkBehaviour
         }
     }
 
-    // Gọi từ SafeZoneDetector khi player ra khỏi thảm
     public void OnPlayerLeftSafeZone(int teamID)
     {
         if (_localTeam != teamID) return;
-        if (_localLeftSafeZone) return; // chỉ xử lý 1 lần
+        if (_localLeftSafeZone) return;
 
         _localLeftSafeZone = true;
         _isInSafeZone      = false;
 
-        // Thấy barrier team mình từ ngoài
         ShowMyBarrierOnCamera();
 
         Debug.Log($"[SafeZone] Player left safe zone permanently");
     }
 
-    // Gọi từ SafeZoneDetector OnTriggerStay/Enter
     public void SetLocalPlayerInSafeZone(bool inZone)
     {
-        if (_localLeftSafeZone) return; // đã ra rồi không cho vào lại
+        if (_localLeftSafeZone) return;
         _isInSafeZone = inZone;
     }
 
-    // WeaponController gọi để check có được bắn không
     public bool CanFire()
     {
-        if (!GameStarted) return false;       // chưa bắt đầu
-        if (_isInSafeZone) return false;      // đang trong safe zone
+        if (!GameStarted) return false;
+        if (_isInSafeZone) return false;
         return true;
     }
 
@@ -180,6 +204,12 @@ public class SafeZoneManager : NetworkBehaviour
 
     void SetLayerRecursive(GameObject go, int layer)
     {
+        if (layer == -1)
+        {
+            Debug.LogError("[SafeZone] Layer chưa được tạo hoặc tên không khớp!");
+            return;
+        }
+
         go.layer = layer;
         foreach (Transform child in go.transform)
             SetLayerRecursive(child.gameObject, layer);

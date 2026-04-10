@@ -2,6 +2,7 @@ using UnityEngine;
 
 public class PlayerAnimatorController : MonoBehaviour
 {
+    [SerializeField] private WeaponAudio _weaponAudio;
     private Animator _animator;
     private FPSController _fpsController;
     private bool _ready;
@@ -32,7 +33,15 @@ public class PlayerAnimatorController : MonoBehaviour
 
     public void TriggerHit() => _animator?.SetTrigger("Hit");
     public void TriggerDeath() => _animator?.SetTrigger("Death");
-    public void TriggerFire() => _animator?.SetTrigger("Fire");
-    public void TriggerReload() => _animator?.SetTrigger("Reload");
+    public void TriggerFire()
+    {
+    _animator?.SetTrigger("Fire");
+    _weaponAudio?.PlayFireSound();
+    }
+    public void TriggerReload()
+    {
+    _animator?.SetTrigger("Reload");
+    _weaponAudio?.PlayReloadSound();
+    }
     public void SetWeaponType(int type) => _animator?.SetInteger("WeaponType", type);
 }
