@@ -1,2 +1,16 @@
 fileFormatVersion: 2
 guid: df6e232f5678a96458def0baf4d6e4f6
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - timerManager: {instanceID: 0}
+  - teamAScoreText: {instanceID: 0}
+  - teamBScoreText: {instanceID: 0}
+  - endGamePanel: {instanceID: 0}
+  - endGameText: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
