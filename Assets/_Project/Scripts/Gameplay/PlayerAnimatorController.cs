@@ -17,12 +17,17 @@ public class PlayerAnimatorController : MonoBehaviour
     {
         if (!_ready)
         {
-            if (_fpsController == null || !_fpsController.Object.IsValid) return;
+            // Kiểm tra _fpsController và biến Object của nó trước khi truy cập IsValid
+            if (_fpsController == null || _fpsController.Object == null || !_fpsController.Object.IsValid)
+                return;
+
             _ready = true;
         }
 
         if (_animator == null) return;
 
+        // Dùng LastForward/LastStrafe — FPSController.Render() đã gán đúng
+        // cho cả local (từ input) lẫn remote (từ NetworkedForward/Strafe)
         float forward = Mathf.Abs(_fpsController.LastForward) < 0.001f ? 0f : _fpsController.LastForward;
         float strafe = Mathf.Abs(_fpsController.LastStrafe) < 0.001f ? 0f : _fpsController.LastStrafe;
 
@@ -33,15 +38,18 @@ public class PlayerAnimatorController : MonoBehaviour
 
     public void TriggerHit() => _animator?.SetTrigger("Hit");
     public void TriggerDeath() => _animator?.SetTrigger("Death");
+
     public void TriggerFire()
     {
-    _animator?.SetTrigger("Fire");
-    _weaponAudio?.PlayFireSound();
+        _animator?.SetTrigger("Fire");
+        _weaponAudio?.PlayFireSound();
     }
+
     public void TriggerReload()
     {
-    _animator?.SetTrigger("Reload");
-    _weaponAudio?.PlayReloadSound();
+        _animator?.SetTrigger("Reload");
+        _weaponAudio?.PlayReloadSound();
     }
+
     public void SetWeaponType(int type) => _animator?.SetInteger("WeaponType", type);
 }

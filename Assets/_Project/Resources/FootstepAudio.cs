@@ -13,9 +13,10 @@ public class FootstepAudio : MonoBehaviour
 
     void Update()
     {
-        if (_fps == null || !_fps.Object.HasInputAuthority) return;
+        // Kiểm tra an toàn: _fps phải tồn tại và NetworkObject (Object) phải khác null
+        if (_fps == null || _fps.Object == null || !_fps.Object.HasInputAuthority) return;
         bool isMoving = Mathf.Abs(_fps.LastForward) > 0.1f
-                     || Mathf.Abs(_fps.LastStrafe)  > 0.1f;
+                     || Mathf.Abs(_fps.LastStrafe) > 0.1f;
         if (!isMoving) { _stepTimer = 0; return; }
 
         _stepTimer -= Time.deltaTime;

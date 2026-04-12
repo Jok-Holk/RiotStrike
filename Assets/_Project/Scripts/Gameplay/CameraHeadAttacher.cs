@@ -26,10 +26,10 @@ public class CameraHeadAttacher : NetworkBehaviour
 
     void LateUpdate()
     {
-        if (!Object.HasInputAuthority) return;
+        // Luôn kiểm tra Object null trước khi truy cập thuộc tính của nó
+        if (Object == null || !Object.HasInputAuthority) return;
         if (_headBone == null) return;
 
-        // Follow toàn bộ position head bone
         transform.position = _headBone.position + offset;
     }
 }

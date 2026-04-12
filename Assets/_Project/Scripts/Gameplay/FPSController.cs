@@ -1,13 +1,13 @@
-﻿using Fusion;
+using Fusion;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
 public class FPSController : NetworkBehaviour
 {
     [Header("Movement")]
-    [SerializeField] private float walkSpeed    = 4f;
-    [SerializeField] private float runSpeed     = 7f;
-    [SerializeField] private float crouchSpeed  = 2f;
+    [SerializeField] private float walkSpeed   = 4f;
+    [SerializeField] private float runSpeed    = 7f;
+    [SerializeField] private float crouchSpeed = 2f;
 
     [Header("Crouch")]
     [SerializeField] private float standHeight           = 2f;
@@ -16,8 +16,10 @@ public class FPSController : NetworkBehaviour
 
     [SerializeField] private float gravity = -20f;
 
-    [Networked] public float NetworkedYaw { get; set; }
-    [Networked] private bool _isCrouching { get; set; }
+    [Networked] public float NetworkedYaw     { get; set; }
+    [Networked] public float NetworkedForward { get; set; }
+    [Networked] public float NetworkedStrafe  { get; set; }
+    [Networked] private bool _isCrouching    { get; set; }
 
     private Vector3             _velocity;
     private CharacterController _cc;
@@ -25,6 +27,7 @@ public class FPSController : NetworkBehaviour
     private float               _targetHeight;
     private bool                _hasLandedOnce;
 
+    // Local cache — dùng cho FootstepAudio và animator local player
     public float LastForward { get; private set; }
     public float LastStrafe  { get; private set; }
     public bool  IsCrouching => _isCrouching;
@@ -41,16 +44,17 @@ public class FPSController : NetworkBehaviour
 
     public override void Spawned()
     {
-        _cc            = GetComponent<CharacterController>();
-        _fpsCamera     = GetComponentInChildren<FPSCamera>();
-        _targetHeight  = standHeight;
-        _velocity      = new Vector3(0f, -2f, 0f);
+        _cc           = GetComponent<CharacterController>();
+        _fpsCamera    = GetComponentInChildren<FPSCamera>();
+        _targetHeight = standHeight;
+        _velocity     = new Vector3(0f, -2f, 0f);
         _hasLandedOnce = false;
 
         _fpsCamera?.Initialize(Object.HasInputAuthority);
 
-        // CC chỉ enable trên StateAuthority — host tính physics
-        _cc.enabled = Object.HasStateAuthority;
+        // CC cần enable trên cả InputAuthority (client tự chạy physics local)
+        // và StateAuthority (host chạy physics authoritative)
+        _cc.enabled = Object.HasInputAuthority || Object.HasStateAuthority;
 
         if (Object.HasInputAuthority)
         {
@@ -75,37 +79,37 @@ public class FPSController : NetworkBehaviour
     {
         if (!GetInput(out NetworkInputData input)) return;
 
-        // Yaw sync qua network để remote players thấy đúng hướng
         NetworkedYaw = input.Yaw;
 
-        // Physics và movement chỉ chạy trên host
-        // Physics chỉ chạy trên host
-        if (Object.HasStateAuthority)
-        {
-            transform.rotation = Quaternion.Euler(0f, NetworkedYaw, 0f);
-            HandleCrouch(input);
-            HandleMovement(input);
-            ApplyGravity();
-        }
+        // Cả InputAuthority lẫn StateAuthority đều chạy movement
+        // Fusion reconcile phía host, client chạy prediction
+        transform.rotation = Quaternion.Euler(0f, NetworkedYaw, 0f);
+        HandleCrouch(input);
+        HandleMovement(input);
+        ApplyGravity();
 
-        // Animation values set trên cả local player (InputAuthority)
-        // để animator chạy đúng trên máy của người chơi đó
+        // Sync animation state qua network để remote player thấy đúng
+        NetworkedForward = input.MoveDirection.y;
+        NetworkedStrafe  = input.MoveDirection.x;
+
+        // Cache local để FootstepAudio dùng
         LastForward = input.MoveDirection.y;
         LastStrafe  = input.MoveDirection.x;
     }
 
     public override void Render()
     {
-        // Remote player: lerp rotation
         if (!Object.HasInputAuthority)
         {
+            // Remote player: lerp rotation + cập nhật LastForward/Strafe từ networked
             transform.rotation = Quaternion.Slerp(
                 transform.rotation,
                 Quaternion.Euler(0f, NetworkedYaw, 0f),
                 Time.deltaTime * 25f);
+
+            LastForward = NetworkedForward;
+            LastStrafe  = NetworkedStrafe;
         }
-        // Local player: FPSCamera.Update() tự handle camera visual
-        // Body rotation được FPSCamera set trực tiếp — không cần làm gì thêm
     }
 
     void HandleCrouch(NetworkInputData input)
