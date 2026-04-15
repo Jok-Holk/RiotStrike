@@ -17,9 +17,9 @@ public class NetworkPlayer : NetworkBehaviour
     [SerializeField] private Vector3 nameplateOffset = new Vector3(0, 0.3f, 0);
 
     private SkinnedMeshRenderer _meshRenderer;
-    private Animator _animator;
+    private Animator  _animator;
     private Transform _headBone;
-    private int _lastTeam = -1;
+    private int    _lastTeam     = -1;
     private string _lastNickName = "";
 
     public override void Spawned()
@@ -29,15 +29,14 @@ public class NetworkPlayer : NetworkBehaviour
 
         _meshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
         _animator     = GetComponentInChildren<Animator>();
-
         if (_animator != null)
             _headBone = _animator.GetBoneTransform(HumanBodyBones.Head);
 
-        var cam = GetComponentInChildren<Camera>();
-        Debug.Log($"Spawned — HasInputAuthority: {Object.HasInputAuthority}, HasStateAuthority: {Object.HasStateAuthority}");
+        Debug.Log($"Spawned — InputAuth={Object.HasInputAuthority} StateAuth={Object.HasStateAuthority}");
 
         if (!Object.HasInputAuthority)
         {
+            var cam = GetComponentInChildren<Camera>();
             if (cam) cam.enabled = false;
             var audio = GetComponentInChildren<AudioListener>();
             if (audio) audio.enabled = false;
@@ -51,36 +50,37 @@ public class NetworkPlayer : NetworkBehaviour
         if (nameplateRoot != null)
             nameplateRoot.gameObject.SetActive(!Object.HasInputAuthority);
 
+        // Fix: lấy nickname từ LobbyManager thay vì PlayerPrefs
+        // PlayerPrefs bị share giữa 2 instance trên cùng máy
         if (Object.HasStateAuthority)
-            NickName = PlayerPrefs.GetString("NickName", "Player");
+        {
+            string nick = LobbyManager.instance != null
+                ? LobbyManager.instance.GetLocalNickName()
+                : "";
+            if (string.IsNullOrEmpty(nick)) nick = "Player";
+            NickName = nick;
+        }
 
         ApplyTeamMaterial();
         ApplyNickName();
     }
 
-    // ── Gọi từ UIRoomManager khi player bấm Join Team ──
     public void RequestChangeTeam(int newTeam)
     {
-        // Chỉ local player của mình mới gọi được
         if (!Object.HasInputAuthority) return;
         RPC_RequestTeam(newTeam);
     }
 
-    // ── Client gửi lên host ──
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     void RPC_RequestTeam(int newTeam)
     {
-        // Host kiểm tra hợp lệ rồi set
         Team = newTeam;
-        // Sau khi set xong, broadcast để mọi client refresh UI
         RPC_NotifyTeamChanged();
     }
 
-    // ── Host broadcast cho tất cả ──
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     void RPC_NotifyTeamChanged()
     {
-        // Mỗi client tìm UIRoomManager và refresh
         FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
     }
 
@@ -113,10 +113,8 @@ public class NetworkPlayer : NetworkBehaviour
     void ApplyTeamMaterial()
     {
         if (_meshRenderer == null) return;
-        if (Team == 0 && teamAMat != null)
-            _meshRenderer.material = teamAMat;
-        else if (Team == 1 && teamBMat != null)
-            _meshRenderer.material = teamBMat;
+        if (Team == 0 && teamAMat != null) _meshRenderer.material = teamAMat;
+        else if (Team == 1 && teamBMat != null) _meshRenderer.material = teamBMat;
     }
 
     void ApplyNickName()
@@ -126,11 +124,8 @@ public class NetworkPlayer : NetworkBehaviour
 
         int localTeam = -1;
         foreach (var p in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
-        {
             if (p.Object.HasInputAuthority) { localTeam = p.Team; break; }
-        }
 
-        nameText.color = (localTeam == -1 || Team == localTeam)
-            ? Color.white : Color.red;
+        nameText.color = (localTeam == -1 || Team == localTeam) ? Color.white : Color.red;
     }
 }

@@ -18,7 +18,8 @@ public class InputProvider : MonoBehaviour, INetworkRunnerCallbacks
         );
 
         _input.LookDelta = Vector2.zero;
-        _input.Yaw       = _fpsCamera != null ? _fpsCamera.Yaw : 0f;
+        _input.Yaw       = _fpsCamera != null ? _fpsCamera.Yaw   : 0f;
+        _input.Pitch     = _fpsCamera != null ? _fpsCamera.Pitch : 0f; // thêm pitch
 
         if (Input.GetKeyDown(KeyCode.LeftControl)) _crouching = !_crouching;
 
@@ -26,15 +27,13 @@ public class InputProvider : MonoBehaviour, INetworkRunnerCallbacks
         _input.Sprint        = Input.GetKey(KeyCode.LeftShift);
         _input.Fire          = Input.GetMouseButton(0);
         _input.Reload        = Input.GetKeyDown(KeyCode.R);
-        _input.SwitchToRifle  = Input.GetKeyDown(KeyCode.Alpha1); // phím 1 = Rifle
-        _input.SwitchToPistol = Input.GetKeyDown(KeyCode.Alpha2); // phím 2 = Pistol
-        // Jump đã bỏ
+        _input.SwitchToRifle  = Input.GetKeyDown(KeyCode.Alpha1);
+        _input.SwitchToPistol = Input.GetKeyDown(KeyCode.Alpha2);
     }
 
     public void OnInput(NetworkRunner runner, NetworkInput input)
     {
         input.Set(_input);
-        // Reset one-frame inputs
         _input.SwitchToPistol = false;
         _input.SwitchToRifle  = false;
         _input.Reload         = false;

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System.Collections;
 using Fusion;
 using TMPro;
 using UnityEngine;
@@ -28,32 +28,51 @@ public class GameManager : NetworkBehaviour
         instance = this;
         _changeDetector = GetChangeDetector(ChangeDetector.Source.SimulationState);
 
-        if (endGamePanel != null)
-            endGamePanel.SetActive(false);
+        if (endGamePanel != null) endGamePanel.SetActive(false);
 
         if (!Object.HasStateAuthority) return;
 
-        // Đọc config từ RoomPlayerData
+        TeamAScore  = 0;
+        TeamBScore  = 0;
+        GameStarted = true;
+        GameEnded   = false;
+
+        // Dùng coroutine để chờ RoomPlayerData sync xong trước khi đọc config
+        // Tránh đọc giá trị mặc định (0) khi RoomPlayerData chưa sẵn sàng
+        StartCoroutine(ApplyLobbyConfig());
+    }
+
+    IEnumerator ApplyLobbyConfig()
+    {
+        // Chờ tối đa 3 giây cho RoomPlayerData
+        float timeout = 3f;
+        while (RoomPlayerData.instance == null && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
         if (RoomPlayerData.instance != null)
         {
             int pistolTime = RoomPlayerData.instance.PistolTime;
             int rifleTime  = RoomPlayerData.instance.RifleTime;
             int roundTime  = pistolTime + rifleTime;
 
-            if (timerManager != null)
+            // Chỉ apply nếu có giá trị hợp lệ (> 0)
+            if (roundTime > 0 && timerManager != null)
+            {
                 timerManager.SetTimings(roundTime, pistolTime);
-
-            Debug.Log($"[GameManager] Round={roundTime}s Pistol={pistolTime}s Rifle={rifleTime}s");
+                Debug.Log($"[GameManager] Config từ lobby: Round={roundTime}s Pistol={pistolTime}s Rifle={rifleTime}s");
+            }
+            else
+            {
+                Debug.LogWarning($"[GameManager] RoomPlayerData có nhưng roundTime={roundTime} — dùng default của TimerManager.");
+            }
         }
         else
         {
-            Debug.LogWarning("[GameManager] RoomPlayerData not found, using TimerManager defaults.");
+            Debug.LogWarning("[GameManager] RoomPlayerData không tìm thấy sau 3s — dùng default TimerManager.");
         }
-
-        TeamAScore  = 0;
-        TeamBScore  = 0;
-        GameStarted = true;
-        GameEnded   = false;
     }
 
     public override void Render()
@@ -68,7 +87,7 @@ public class GameManager : NetworkBehaviour
                     break;
                 case nameof(GameEnded):
                     if (GameEnded) ShowEndGame();
-                    break;
+break;
             }
         }
     }
@@ -77,22 +96,17 @@ public class GameManager : NetworkBehaviour
     {
         if (!Object.HasStateAuthority) return;
         if (!GameStarted || GameEnded) return;
-
-        // Kiểm tra hết giờ
         if (timerManager != null && timerManager.IsTimeUp())
             EndGame();
     }
 
-    // Gọi từ PlayerHealth khi có kill
     public void RegisterKill(int killerTeam)
     {
         if (!Object.HasStateAuthority) return;
         if (GameEnded) return;
-
         if (killerTeam == 0) TeamAScore++;
         else                 TeamBScore++;
-
-        Debug.Log($"[GameManager] Kill registered. TeamA={TeamAScore} TeamB={TeamBScore}");
+        Debug.Log($"[GameManager] Kill. TeamA={TeamAScore} TeamB={TeamBScore}");
     }
 
     void EndGame()
@@ -107,24 +121,24 @@ public class GameManager : NetworkBehaviour
         ShowEndGameResult(scoreA, scoreB);
     }
 
-    void ShowEndGame()
-    {
-        ShowEndGameResult(TeamAScore, TeamBScore);
-    }
+    void ShowEndGame() => ShowEndGameResult(TeamAScore, TeamBScore);
 
     void ShowEndGameResult(int scoreA, int scoreB)
     {
-        if (endGamePanel != null)
-            endGamePanel.SetActive(true);
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible   = true;
 
-        if (endGameText != null)
+        string result;
+        if (scoreA > scoreB)      result = "TEAM A THẮNG!";
+        else if (scoreB > scoreA) result = "TEAM B THẮNG!";
+        else                      result = "HÒA!";
+
+        if (EndRoundUI.instance != null)
+            EndRoundUI.instance.ShowResult(result, scoreA, scoreB);
+        else
         {
-            if (scoreA > scoreB)
-                endGameText.text = $"TEAM A THẮNG!\n{scoreA} - {scoreB}";
-            else if (scoreB > scoreA)
-                endGameText.text = $"TEAM B THẮNG!\n{scoreA} - {scoreB}";
-            else
-                endGameText.text = $"HÒA!\n{scoreA} - {scoreB}";
+            if (endGamePanel != null) endGamePanel.SetActive(true);
+            if (endGameText  != null) endGameText.text = $"{result}\n{scoreA} - {scoreB}";
         }
 
         Debug.Log($"[GameManager] Game ended. A={scoreA} B={scoreB}");

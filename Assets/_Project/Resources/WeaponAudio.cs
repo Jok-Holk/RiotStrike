@@ -10,13 +10,25 @@ public class WeaponAudio : MonoBehaviour
 
     private WeaponController _wc;
 
-    void Start() => _wc = GetComponent<WeaponController>();
+    void Start()
+    {
+        _wc = GetComponent<WeaponController>();
+
+        // Auto-create AudioSource nếu không được gắn trong Inspector
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.spatialBlend = 1f; // 3D audio
+            audioSource.rolloffMode  = AudioRolloffMode.Linear;
+            audioSource.maxDistance  = 50f;
+            audioSource.playOnAwake  = false;
+        }
+    }
 
     public void PlayFireSound()
     {
         if (_wc == null || audioSource == null) return;
 
-        // Dùng CurrentSlot (networked, chính xác) thay vì IsRifleUnlocked
         AudioClip clip;
         if (_wc.CurrentSlotID == 1) // Rifle
             clip = _wc.TeamID == 0 ? ak47Sound : m4a1Sound;
@@ -25,15 +37,14 @@ public class WeaponAudio : MonoBehaviour
 
         if (clip == null) return;
 
-        // Chỉ play nếu không đang play clip đó để tránh overlap spam
-        // PlayOneShot cho phép overlap — dùng trực tiếp vì đây là tốc độ fire bình thường
+        // PlayOneShot cho phép overlap tự nhiên theo fireRate — đúng behavior
         audioSource.PlayOneShot(clip);
     }
 
     public void PlayReloadSound()
     {
         if (audioSource == null || reloadSound == null) return;
-        // Stop reload sound cũ trước khi play mới tránh chồng chéo
+        // Stop clip hiện tại để tránh chồng reload sound
         audioSource.Stop();
         audioSource.PlayOneShot(reloadSound);
     }

@@ -21,29 +21,29 @@ public class WeaponController : NetworkBehaviour
 
     [Header("References")]
     [SerializeField] private GameObject muzzleFlashVFX;
-    [SerializeField] private Camera     fpsCamera;
 
     [Header("Raycast Settings")]
     [SerializeField] private LayerMask shootableMask;
 
-    // --- Networked state (chỉ StateAuthority write) ---
     [Networked] public int        CurrentAmmo     { get; set; }
     [Networked] public int        ReserveAmmo     { get; set; }
     [Networked] public bool       IsRifleUnlocked { get; set; }
     [Networked] private TickTimer _reloadTimer    { get; set; }
     [Networked] private TickTimer _fireTimer      { get; set; }
-    [Networked] public  int       CurrentSlot     { get; set; } // 0=Pistol 1=Rifle — networked để render sync
+    [Networked] public  int       CurrentSlot     { get; set; }
     [Networked] public  int       TeamID          { get; set; }
+    [Networked] private float     _lastInputYaw   { get; set; }
+    [Networked] private float     _lastInputPitch { get; set; }
 
-    // Local visual state (không cần networked)
     private WeaponData    _currentWeapon;
     private Transform     _currentFirePoint;
     private FPSController _fpsController;
 
-    // Render-side change detection
-    private int  _lastRenderedSlot      = -1;
-    private int  _lastRenderedTeam      = -1;
-    private bool _lastRifleUnlocked     = false;
+    private int  _lastRenderedSlot  = -1;
+    private int  _lastRenderedTeam  = -1;
+    private bool _lastRifleUnlocked = false;
+
+    private const float EYE_HEIGHT = 1.55f;
 
     public override void Spawned()
     {
@@ -54,19 +54,35 @@ public class WeaponController : NetworkBehaviour
             var np = GetComponent<NetworkPlayer>();
             TeamID          = np != null ? np.Team : 0;
             IsRifleUnlocked = false;
-            CurrentSlot     = 0; // bắt đầu với pistol
+            CurrentSlot     = 0;
             CurrentAmmo     = pistolData != null ? pistolData.magazineSize : 12;
             ReserveAmmo     = pistolData != null ? pistolData.reserveAmmo  : 36;
         }
 
         HideAllModels();
-    }
 
-    public override void Render()
+        // Fix weapon bounds visibility
+        foreach (var m in new[] { ak47Model, m4a1Model, pistolModel })
+            if (m != null)
+                foreach (var r in m.GetComponentsInChildren<Renderer>())
+                    r.allowOcclusionWhenDynamic = false;
+
+        var smr = GetComponentInChildren<SkinnedMeshRenderer>();
+        if (smr != null) smr.updateWhenOffscreen = true;
+
+        // Fix: Set animation state ngay khi spawn cho local player
+        // Không chờ Render() detect slot change để tránh delay 1 frame
+        if (Object.HasInputAuthority)
+        {
+            // Default: pistol
+            _fpsController?.SetWeaponType(1);
+            if (pistolModel) pistolModel.SetActive(true);
+        }
+    }
+public override void Render()
     {
         if (!Object.HasInputAuthority) return;
 
-        // Equip visual khi slot hoặc team thay đổi
         bool slotChanged = CurrentSlot != _lastRenderedSlot;
         bool teamChanged = TeamID      != _lastRenderedTeam;
 
@@ -81,11 +97,9 @@ public class WeaponController : NetworkBehaviour
                 ApplyPistolVisual();
         }
 
-        // Auto switch sang rifle khi vừa unlock
         if (IsRifleUnlocked && !_lastRifleUnlocked)
         {
             _lastRifleUnlocked = true;
-            Debug.Log("[WeaponController] Rifle unlocked — auto switching");
             RPC_RequestSlotChange(1);
         }
     }
@@ -93,12 +107,13 @@ public class WeaponController : NetworkBehaviour
     public override void FixedUpdateNetwork()
     {
         if (!GetInput(out NetworkInputData input)) return;
-        if (!Object.HasStateAuthority) return; // chỉ host xử lý weapon logic
+        if (!Object.HasStateAuthority) return;
 
-        if (_currentWeapon == null)
-            RefreshWeaponReference();
+        _lastInputYaw   = input.Yaw;
+        _lastInputPitch = input.Pitch;
 
-        // Switch weapon request từ input
+        if (_currentWeapon == null) RefreshWeaponReference();
+
         if (input.SwitchToRifle && IsRifleUnlocked && CurrentSlot != 1)
         {
             CurrentSlot = 1;
@@ -116,12 +131,11 @@ public class WeaponController : NetworkBehaviour
 
         if (_currentWeapon == null) return;
 
-        // Reload complete
         if (_reloadTimer.Expired(Runner))
         {
             _reloadTimer = default;
-            int needed  = _currentWeapon.magazineSize - CurrentAmmo;
-            int take    = Mathf.Min(needed, ReserveAmmo);
+            int needed = _currentWeapon.magazineSize - CurrentAmmo;
+            int take   = Mathf.Min(needed, ReserveAmmo);
             CurrentAmmo += take;
             ReserveAmmo -= take;
         }
@@ -129,7 +143,13 @@ public class WeaponController : NetworkBehaviour
         bool isReloading = !_reloadTimer.ExpiredOrNotRunning(Runner);
         bool canFire     = SafeZoneManager.instance == null || SafeZoneManager.instance.CanFire();
 
-        // Fire
+        if (!canFire)
+        {
+            // Debug: log lý do không bắn được
+            if (input.Fire && Runner.IsForward)
+                Debug.Log($"[WeaponController] CanFire=false. SafeZone={SafeZoneManager.instance?.CanFire()} GameStarted={SafeZoneManager.instance?.GameStarted}");
+        }
+
         if (canFire && input.Fire
             && _fireTimer.ExpiredOrNotRunning(Runner)
             && !isReloading
@@ -140,38 +160,50 @@ public class WeaponController : NetworkBehaviour
             ServerFire();
         }
 
-        // Reload request
         if (input.Reload
             && _reloadTimer.ExpiredOrNotRunning(Runner)
             && CurrentAmmo < _currentWeapon.magazineSize
             && ReserveAmmo > 0)
         {
-            _reloadTimer = TickTimer.CreateFromSeconds(Runner, _currentWeapon.reloadTime);
+_reloadTimer = TickTimer.CreateFromSeconds(Runner, _currentWeapon.reloadTime);
             RPC_NotifyReload();
         }
     }
 
-    // Chỉ chạy trên StateAuthority — raycast + damage authoritative
     void ServerFire()
     {
-        // Notify visual/audio cho local player qua RPC
         RPC_NotifyFire();
-
-        // Raycast chỉ 1 lần trên forward tick
         if (!Runner.IsForward) return;
 
-        Camera cam = fpsCamera != null ? fpsCamera : Camera.main;
-        if (cam == null) return;
+        Vector3 eyePos  = transform.position + Vector3.up * EYE_HEIGHT;
+        Vector3 forward = Quaternion.Euler(_lastInputPitch, _lastInputYaw, 0f) * Vector3.forward;
+        var ray = new Ray(eyePos, forward);
 
-        var ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2f, Screen.height / 2f));
-        if (!Physics.Raycast(ray, out RaycastHit hit, _currentWeapon.range, shootableMask)) return;
+        // Debug: luôn vẽ ray để xác nhận hướng bắn
+        Debug.DrawLine(ray.origin, ray.origin + forward * _currentWeapon.range, Color.yellow, 1f);
 
-        Debug.DrawLine(ray.origin, hit.point, Color.red, 1f);
+        if (shootableMask == 0)
+        {
+            // Không có layer nào được chọn — dùng Physics.DefaultRaycastLayers
+            Debug.LogWarning("[WeaponController] shootableMask = Nothing! Tự dùng DefaultRaycastLayers.");
+            if (!Physics.Raycast(ray, out RaycastHit hitDefault, _currentWeapon.range)) return;
+            ProcessHit(hitDefault);
+        }
+        else
+        {
+            if (!Physics.Raycast(ray, out RaycastHit hit, _currentWeapon.range, shootableMask)) return;
+            ProcessHit(hit);
+        }
+    }
+
+    void ProcessHit(RaycastHit hit)
+    {
+        Debug.DrawLine(new Ray(transform.position + Vector3.up * EYE_HEIGHT,
+            Quaternion.Euler(_lastInputPitch, _lastInputYaw, 0f) * Vector3.forward).origin, hit.point, Color.red, 1f);
+        Debug.Log($"[WeaponController] Hit: {hit.collider.name} layer={LayerMask.LayerToName(hit.collider.gameObject.layer)}");
 
         var health = hit.collider.GetComponentInParent<PlayerHealth>();
         if (health == null) return;
-
-        // Jangan tembak diri sendiri
         if (health.Object.InputAuthority == Object.InputAuthority) return;
 
         bool isHeadshot = hit.collider.CompareTag("Head");
@@ -183,7 +215,6 @@ public class WeaponController : NetworkBehaviour
         hit.collider.GetComponentInParent<FPSController>()?.TriggerHit();
     }
 
-    // InputAuthority → StateAuthority: yêu cầu đổi slot
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     void RPC_RequestSlotChange(int slot)
     {
@@ -197,11 +228,9 @@ public class WeaponController : NetworkBehaviour
         }
     }
 
-    // StateAuthority → All: thông báo fire để play visual + audio
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     void RPC_NotifyFire()
     {
-        // Visual
         if (muzzleFlashVFX != null && _currentFirePoint != null)
         {
             muzzleFlashVFX.transform.SetPositionAndRotation(
@@ -209,15 +238,12 @@ public class WeaponController : NetworkBehaviour
             muzzleFlashVFX.SetActive(true);
             Invoke(nameof(HideMuzzleFlash), 0.05f);
         }
-
-        // Animation + audio (chỉ local player cần TriggerFire — remote thấy qua animator sync)
         if (Object.HasInputAuthority)
             _fpsController?.TriggerFire();
     }
 
-    // StateAuthority → All: thông báo reload để play animation + audio
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    void RPC_NotifyReload()
+void RPC_NotifyReload()
     {
         if (Object.HasInputAuthority)
             _fpsController?.TriggerReload();
@@ -225,7 +251,6 @@ public class WeaponController : NetworkBehaviour
 
     void HideMuzzleFlash() => muzzleFlashVFX?.SetActive(false);
 
-    // Cập nhật _currentWeapon và _currentFirePoint theo slot + team hiện tại
     void RefreshWeaponReference()
     {
         if (CurrentSlot == 0)
@@ -236,12 +261,11 @@ public class WeaponController : NetworkBehaviour
         else
         {
             bool isAK         = TeamID == 0;
-            _currentWeapon    = isAK ? ak47Data    : m4a1Data;
+            _currentWeapon    = isAK ? ak47Data     : m4a1Data;
             _currentFirePoint = isAK ? ak47FirePoint : m4a1FirePoint;
         }
     }
 
-    // Apply visual chỉ trên InputAuthority (local player)
     void ApplyPistolVisual()
     {
         _currentWeapon    = pistolData;
@@ -253,15 +277,12 @@ public class WeaponController : NetworkBehaviour
 
     void ApplyRifleVisual()
     {
-        bool isAK = TeamID == 0;
-        _currentWeapon    = isAK ? ak47Data    : m4a1Data;
+        bool isAK         = TeamID == 0;
+        _currentWeapon    = isAK ? ak47Data     : m4a1Data;
         _currentFirePoint = isAK ? ak47FirePoint : m4a1FirePoint;
         HideAllModels();
         if (isAK) { if (ak47Model) ak47Model.SetActive(true); }
-        else      { if (m4a1Model) m4a1Model.SetActive(true); }
-        _fpsController?.SetWeaponType(0);
     }
-
     void HideAllModels()
     {
         if (ak47Model)   ak47Model.SetActive(false);
@@ -273,10 +294,7 @@ public class WeaponController : NetworkBehaviour
     {
         if (!Object.HasStateAuthority) return;
         IsRifleUnlocked = true;
-        // CurrentSlot sẽ được switch qua Render() → RPC_RequestSlotChange
-        Debug.Log("[WeaponController] Rifle unlocked!");
     }
 
-    // Accessor cho WeaponAudio
     public int CurrentSlotID => CurrentSlot;
-}
+    }

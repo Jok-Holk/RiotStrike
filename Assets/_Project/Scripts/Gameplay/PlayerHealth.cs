@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using Fusion;
 using UnityEngine;
 
@@ -37,7 +38,6 @@ public class PlayerHealth : NetworkBehaviour
     {
         _isDead = true;
 
-        // Tìm team của killer để register kill
         if (GameManager.instance != null && killerRef != default)
         {
             int killerTeam = GetKillerTeam(killerRef);
@@ -57,13 +57,10 @@ public class PlayerHealth : NetworkBehaviour
         return 0;
     }
 
-    System.Collections.IEnumerator RespawnAfterDelay()
+    IEnumerator RespawnAfterDelay()
     {
         yield return new WaitForSeconds(respawnDelay);
         if (!Object.HasStateAuthority) yield break;
-
-        Health  = maxHealth;
-        _isDead = false;
 
         var spawner = FindFirstObjectByType<PlayerSpawner>();
         if (spawner != null)
@@ -76,6 +73,10 @@ public class PlayerHealth : NetworkBehaviour
             fps?.InitSpawnPosition(spawnPos);
         }
 
+        Health  = maxHealth;
+        _isDead = false;
+
+        RPC_OnRespawned();
         RPC_NotifyHealthChanged();
     }
 
@@ -86,6 +87,26 @@ public class PlayerHealth : NetworkBehaviour
     void RPC_OnDied()
     {
         OnPlayerDied?.Invoke(this);
+        GetComponent<FPSController>()?.TriggerDeath();
         Debug.Log($"[PlayerHealth] {gameObject.name} died");
+    }
+
+    // Thông báo respawn để client reset visual state
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_OnRespawned()
+    {
+        // Reset animator về idle khi sống lại
+        var pac = GetComponent<PlayerAnimatorController>();
+        if (pac != null)
+        {
+            // Reset trigger Death nếu còn pending
+            var animator = GetComponentInChildren<Animator>();
+            if (animator != null)
+            {
+                animator.ResetTrigger("Death");
+                animator.SetTrigger("Respawn"); // cần state Respawn trong animator, hoặc bỏ qua
+            }
+        }
+        Debug.Log($"[PlayerHealth] {gameObject.name} respawned");
     }
 }

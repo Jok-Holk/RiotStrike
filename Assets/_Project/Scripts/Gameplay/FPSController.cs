@@ -16,10 +16,11 @@ public class FPSController : NetworkBehaviour
 
     [SerializeField] private float gravity = -20f;
 
-    [Networked] public float NetworkedYaw     { get; set; }
-    [Networked] public float NetworkedForward { get; set; }
-    [Networked] public float NetworkedStrafe  { get; set; }
-    [Networked] private bool _isCrouching    { get; set; }
+    [Networked] public Vector3 NetworkedPosition { get; set; }
+    [Networked] public float   NetworkedYaw      { get; set; }
+    [Networked] public float   NetworkedForward  { get; set; }
+    [Networked] public float   NetworkedStrafe   { get; set; }
+    [Networked] private bool   _isCrouching     { get; set; }
 
     private Vector3             _velocity;
     private CharacterController _cc;
@@ -27,7 +28,6 @@ public class FPSController : NetworkBehaviour
     private float               _targetHeight;
     private bool                _hasLandedOnce;
 
-    // Local cache — dùng cho FootstepAudio và animator local player
     public float LastForward { get; private set; }
     public float LastStrafe  { get; private set; }
     public bool  IsCrouching => _isCrouching;
@@ -35,26 +35,29 @@ public class FPSController : NetworkBehaviour
     public void InitSpawnPosition(Vector3 pos)
     {
         if (_cc == null) _cc = GetComponent<CharacterController>();
-        _cc.enabled        = false;
+        _cc.enabled       = false;
         transform.position = pos;
-        _cc.enabled        = true;
-        _velocity          = new Vector3(0f, -2f, 0f);
-        _hasLandedOnce     = false;
+        _cc.enabled       = true;
+        NetworkedPosition = pos;
+        _velocity         = new Vector3(0f, -2f, 0f);
+        _hasLandedOnce    = false;
     }
 
     public override void Spawned()
     {
-        _cc           = GetComponent<CharacterController>();
-        _fpsCamera    = GetComponentInChildren<FPSCamera>();
-        _targetHeight = standHeight;
-        _velocity     = new Vector3(0f, -2f, 0f);
+        _cc            = GetComponent<CharacterController>();
+        _fpsCamera     = GetComponentInChildren<FPSCamera>();
+        _targetHeight  = standHeight;
+        _velocity      = new Vector3(0f, -2f, 0f);
         _hasLandedOnce = false;
 
         _fpsCamera?.Initialize(Object.HasInputAuthority);
 
-        // CC cần enable trên cả InputAuthority (client tự chạy physics local)
-        // và StateAuthority (host chạy physics authoritative)
-        _cc.enabled = Object.HasInputAuthority || Object.HasStateAuthority;
+        // CC chỉ chạy trên StateAuthority (host)
+        // Client dùng NetworkedPosition để nhận vị trí — không bị double-movement
+        _cc.enabled = Object.HasStateAuthority;
+
+        NetworkedPosition = transform.position;
 
         if (Object.HasInputAuthority)
         {
@@ -78,38 +81,47 @@ public class FPSController : NetworkBehaviour
     public override void FixedUpdateNetwork()
     {
         if (!GetInput(out NetworkInputData input)) return;
+NetworkedYaw     = input.Yaw;
+        NetworkedForward = input.MoveDirection.y;
+        NetworkedStrafe  = input.MoveDirection.x;
+        LastForward      = input.MoveDirection.y;
+        LastStrafe       = input.MoveDirection.x;
 
-        NetworkedYaw = input.Yaw;
+        // Physics chỉ chạy trên host
+        if (!Object.HasStateAuthority) return;
 
-        // Cả InputAuthority lẫn StateAuthority đều chạy movement
-        // Fusion reconcile phía host, client chạy prediction
         transform.rotation = Quaternion.Euler(0f, NetworkedYaw, 0f);
         HandleCrouch(input);
         HandleMovement(input);
         ApplyGravity();
 
-        // Sync animation state qua network để remote player thấy đúng
-        NetworkedForward = input.MoveDirection.y;
-        NetworkedStrafe  = input.MoveDirection.x;
-
-        // Cache local để FootstepAudio dùng
-        LastForward = input.MoveDirection.y;
-        LastStrafe  = input.MoveDirection.x;
+        NetworkedPosition = transform.position;
     }
 
     public override void Render()
     {
+        if (Object.HasStateAuthority)
+        {
+            LastForward = NetworkedForward;
+            LastStrafe  = NetworkedStrafe;
+            return;
+        }
+
+        // Client lerp position từ host về
+        transform.position = Vector3.Lerp(transform.position, NetworkedPosition, Time.deltaTime * 30f);
+
         if (!Object.HasInputAuthority)
         {
-            // Remote player: lerp rotation + cập nhật LastForward/Strafe từ networked
+            // Remote player: lerp rotation
             transform.rotation = Quaternion.Slerp(
                 transform.rotation,
                 Quaternion.Euler(0f, NetworkedYaw, 0f),
                 Time.deltaTime * 25f);
-
-            LastForward = NetworkedForward;
-            LastStrafe  = NetworkedStrafe;
         }
+        // Local player camera rotation được FPSCamera.Update() xử lý trực tiếp
+
+        LastForward = NetworkedForward;
+        LastStrafe  = NetworkedStrafe;
     }
 
     void HandleCrouch(NetworkInputData input)
@@ -151,5 +163,5 @@ public class FPSController : NetworkBehaviour
     public void TriggerDeath()  => GetComponent<PlayerAnimatorController>()?.TriggerDeath();
     public void TriggerFire()   => GetComponent<PlayerAnimatorController>()?.TriggerFire();
     public void TriggerReload() => GetComponent<PlayerAnimatorController>()?.TriggerReload();
-    public void SetWeaponType(int type) => GetComponent<PlayerAnimatorController>()?.SetWeaponType(type);
+public void SetWeaponType(int type) => GetComponent<PlayerAnimatorController>()?.SetWeaponType(type);
 }
