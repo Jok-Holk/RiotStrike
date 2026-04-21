@@ -11,17 +11,17 @@ public class EndRoundUI : MonoBehaviour
     [SerializeField] private GameObject panel;
     [SerializeField] private TextMeshProUGUI resultText;
     [SerializeField] private TextMeshProUGUI scoreText;
-    [SerializeField] private Button restartButton;
+    //[SerializeField] private Button restartButton;
 
 
     void Awake() => instance = this;
 
-    void Start()
-    {
-        var runner = FindFirstObjectByType<NetworkRunner>();
-        if (restartButton != null)
-            restartButton.gameObject.SetActive(runner != null && runner.IsServer);
-    }
+    // void Start()
+    // {
+    //     var runner = FindFirstObjectByType<NetworkRunner>();
+    //     if (restartButton != null)
+    //         restartButton.gameObject.SetActive(runner != null && runner.IsServer);
+    // }
 
     public void ShowResult(string result, int scoreA, int scoreB)
     {

@@ -20,8 +20,8 @@ public class SpawnCallbackHandler : MonoBehaviour, INetworkRunnerCallbacks
         _runner = FindFirstObjectByType<NetworkRunner>();
         if (_runner != null)
             _runner.AddCallbacks(this);
-        else
-            Debug.LogError("SpawnCallbackHandler: No NetworkRunner found!");
+        // else
+        //     Debug.LogError("SpawnCallbackHandler: No NetworkRunner found!");
     }
 
     public void OnSceneLoadDone(NetworkRunner runner)
