@@ -205,7 +205,11 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
         => OnJoinFailed?.Invoke(reason.ToString());
 
     public void OnConnectedToServer(NetworkRunner runner) { }
-    public void OnInput(NetworkRunner runner, NetworkInput input) { _inputProvider?.OnInput(runner, input); }
+    // InputProvider đã được đăng ký trực tiếp với runner qua AddCallbacks(_inputProvider)
+    // → Fusion gọi InputProvider.OnInput() trực tiếp — KHÔNG delegate lại ở đây
+    // Nếu delegate, OnInput() bị gọi 2 lần: lần 1 set Reload=true rồi reset false,
+    // lần 2 ghi đè Reload=false → input one-shot (R, 1, 2) bị mất.
+    public void OnInput(NetworkRunner runner, NetworkInput input) { }
     public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
     public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
     public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }

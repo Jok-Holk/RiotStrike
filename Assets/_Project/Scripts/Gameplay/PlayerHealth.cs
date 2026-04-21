@@ -22,6 +22,15 @@ public class PlayerHealth : NetworkBehaviour
             Health = maxHealth;
     }
 
+    /// Dùng khi shooter (shared mode) cần gây sát thương lên player khác.
+    /// StateAuthority của target mới được phép giảm HP — gọi qua RPC này.
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TakeDamage(int damage, PlayerRef killerRef)
+    {
+        Debug.Log($"[PlayerHealth] RPC_TakeDamage nhận: dmg={damage} killer={killerRef} isDead={_isDead} hp={Health} hasAuth={Object.HasStateAuthority}");
+        TakeDamage(damage, killerRef);
+    }
+
     public void TakeDamage(int damage, PlayerRef killerRef = default)
     {
         if (!Object.HasStateAuthority) return;

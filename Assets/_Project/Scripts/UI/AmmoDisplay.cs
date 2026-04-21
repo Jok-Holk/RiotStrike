@@ -53,7 +53,8 @@ public class AmmoDisplay : MonoBehaviour
             if (slot == 0)
                 weaponNameText.text = "PISTOL";
             else
-                weaponNameText.text = _wc.TeamID == 0 ? "AK-47u" : "M4A1";
+                // Team 0 = XANH = M4A1 | Team 1 = ĐỎ = AK-47u
+                weaponNameText.text = _wc.TeamID == 1 ? "AK-47u" : "M4A1";
         }
     }
 }

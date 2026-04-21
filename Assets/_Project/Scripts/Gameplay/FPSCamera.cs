@@ -8,17 +8,21 @@ public class FPSCamera : NetworkBehaviour
     private float _xRotation, _yRotation;
     private bool _hasAuthority, _initialized;
     private Transform _bodyTransform;
+    private Camera _cam;
+    private float  _defaultFOV = 60f;
 
     public float Yaw   => _yRotation;
     public float Pitch => _xRotation;
 
     public void Initialize(bool hasInputAuthority)
     {
-        _hasAuthority  = hasInputAuthority;
-        _bodyTransform = transform.parent.parent;
+        _hasAuthority = hasInputAuthority;
+        // Tìm FPSController qua component thay vì dùng parent.parent (fragile với hierarchy depth)
+        var fps = GetComponentInParent<FPSController>();
+        _bodyTransform = fps != null ? fps.transform : transform.parent?.parent;
         _initialized   = true;
 
-        var cam   = GetComponent<Camera>();
+        _cam  = GetComponent<Camera>();
         var audio = GetComponent<AudioListener>();
 
         if (_hasAuthority)
@@ -28,17 +32,17 @@ public class FPSCamera : NetworkBehaviour
             _xRotation = 0f;
             _yRotation = _bodyTransform != null ? _bodyTransform.eulerAngles.y : 0f;
 
-            if (cam)
+            if (_cam)
             {
-                cam.enabled       = true;
-                // Fix: near clip plane nhỏ để súng không bị clip khi nhìn lên/xuống
-                cam.nearClipPlane = 0.01f;
+                _cam.enabled       = true;
+                _cam.nearClipPlane = 0.01f;
+                _defaultFOV        = _cam.fieldOfView; // lưu FOV mặc định để ADS tính tỷ lệ
             }
             if (audio) audio.enabled = true;
         }
         else
         {
-            if (cam)   cam.enabled   = false;
+            if (_cam)  _cam.enabled  = false;
             if (audio) audio.enabled = false;
         }
     }
@@ -46,6 +50,14 @@ public class FPSCamera : NetworkBehaviour
     void Update()
     {
         if (!_hasAuthority || !_initialized) return;
+
+        // ADS (Aim Down Sights) — chuột phải thu hẹp FOV
+        if (_cam != null)
+        {
+            bool isAiming   = Input.GetMouseButton(1);
+            float targetFOV = isAiming ? _defaultFOV * 0.55f : _defaultFOV;
+            _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, targetFOV, Time.deltaTime * 14f);
+        }
 
         float mouseX =  Input.GetAxisRaw("Mouse X") * sensitivity;
         float mouseY =  Input.GetAxisRaw("Mouse Y") * sensitivity;

@@ -2,21 +2,24 @@ using Fusion;
 using TMPro;
 using UnityEngine;
 
+/// <summary>
+/// Team 0 = XANH | Team 1 = ĐỎ
+/// </summary>
 public class NetworkPlayer : NetworkBehaviour
 {
     [Networked] public int Team { get; set; }
     [Networked] public NetworkString<_32> NickName { get; set; }
 
-    [Header("Team Materials")]
-    [SerializeField] private Material teamAMat;
-    [SerializeField] private Material teamBMat;
+    [Header("Team Materials — 0=Xanh, 1=Đỏ")]
+    [SerializeField] private Material teamAMat; // Xanh (Team 0)
+    [SerializeField] private Material teamBMat; // Đỏ  (Team 1)
 
     [Header("Nameplate")]
     [SerializeField] private TextMeshProUGUI nameText;
     [SerializeField] private Transform nameplateRoot;
     [SerializeField] private Vector3 nameplateOffset = new Vector3(0, 0.3f, 0);
 
-    private SkinnedMeshRenderer _meshRenderer;
+    private SkinnedMeshRenderer _bodyRenderer;
     private Animator  _animator;
     private Transform _headBone;
     private int    _lastTeam     = -1;
@@ -27,36 +30,50 @@ public class NetworkPlayer : NetworkBehaviour
         var nt = GetComponent<NetworkTransform>();
         if (nt != null) nt.enabled = false;
 
-        _meshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
+        _bodyRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
         _animator     = GetComponentInChildren<Animator>();
         if (_animator != null)
             _headBone = _animator.GetBoneTransform(HumanBodyBones.Head);
 
-        Debug.Log($"Spawned — InputAuth={Object.HasInputAuthority} StateAuth={Object.HasStateAuthority}");
-
         if (!Object.HasInputAuthority)
         {
+            // Remote player: tắt camera + AudioListener
             var cam = GetComponentInChildren<Camera>();
             if (cam) cam.enabled = false;
+
+            // Tắt AudioListener — fix lỗi "2 audio listeners in scene"
             var audio = GetComponentInChildren<AudioListener>();
             if (audio) audio.enabled = false;
         }
         else
         {
-            foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>())
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+            // Local player: tất cả SkinnedMeshRenderer → ShadowsOnly để không thấy body/tay mình trong FPV.
+            // Áp dụng cho tất cả thay vì chỉ _bodyRenderer đầu tiên,
+            // vì character có thể gồm nhiều mesh riêng (body, tay, phụ kiện...).
+            foreach (var smr in GetComponentsInChildren<SkinnedMeshRenderer>())
+                smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+
+            // Bật AudioListener cho local player — fix lỗi "no audio listeners in scene"
+            var audioListener = GetComponentInChildren<AudioListener>(true);
+            if (audioListener == null)
+            {
+                // Prefab không có AudioListener → thêm vào camera hoặc root object
+                var cam = GetComponentInChildren<Camera>(true);
+                audioListener = cam != null
+                    ? cam.gameObject.AddComponent<AudioListener>()
+                    : gameObject.AddComponent<AudioListener>();
+                Debug.Log($"[NetworkPlayer] Tự thêm AudioListener vào {audioListener.gameObject.name}");
+            }
+            audioListener.enabled = true;
         }
 
         if (nameplateRoot != null)
             nameplateRoot.gameObject.SetActive(!Object.HasInputAuthority);
 
-        // Fix: lấy nickname từ LobbyManager thay vì PlayerPrefs
-        // PlayerPrefs bị share giữa 2 instance trên cùng máy
         if (Object.HasStateAuthority)
         {
             string nick = LobbyManager.instance != null
-                ? LobbyManager.instance.GetLocalNickName()
-                : "";
+                ? LobbyManager.instance.GetLocalNickName() : "";
             if (string.IsNullOrEmpty(nick)) nick = "Player";
             NickName = nick;
         }
@@ -72,17 +89,10 @@ public class NetworkPlayer : NetworkBehaviour
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
-    void RPC_RequestTeam(int newTeam)
-    {
-        Team = newTeam;
-        RPC_NotifyTeamChanged();
-    }
+    void RPC_RequestTeam(int newTeam) { Team = newTeam; RPC_NotifyTeamChanged(); }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    void RPC_NotifyTeamChanged()
-    {
-        FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
-    }
+    void RPC_NotifyTeamChanged() => FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
 
     public override void Render()
     {
@@ -112,20 +122,19 @@ public class NetworkPlayer : NetworkBehaviour
 
     void ApplyTeamMaterial()
     {
-        if (_meshRenderer == null) return;
-        if (Team == 0 && teamAMat != null) _meshRenderer.material = teamAMat;
-        else if (Team == 1 && teamBMat != null) _meshRenderer.material = teamBMat;
+        if (_bodyRenderer == null) return;
+        // Team 0 = xanh = teamAMat, Team 1 = đỏ = teamBMat
+        if (Team == 0 && teamAMat != null)      _bodyRenderer.material = teamAMat;
+        else if (Team == 1 && teamBMat != null) _bodyRenderer.material = teamBMat;
     }
 
     void ApplyNickName()
     {
         if (nameText == null) return;
         nameText.text = NickName.ToString();
-
         int localTeam = -1;
         foreach (var p in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
             if (p.Object.HasInputAuthority) { localTeam = p.Team; break; }
-
         nameText.color = (localTeam == -1 || Team == localTeam) ? Color.white : Color.red;
     }
 }

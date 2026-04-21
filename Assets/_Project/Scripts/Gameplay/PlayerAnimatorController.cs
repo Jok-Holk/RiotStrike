@@ -2,24 +2,27 @@ using UnityEngine;
 
 public class PlayerAnimatorController : MonoBehaviour
 {
-    // Không cần SerializeField — tự tìm trong Start() để tránh missing link
     private WeaponAudio   _weaponAudio;
     private Animator      _animator;
     private FPSController _fpsController;
     private bool          _ready;
 
-    void Start()
+    // WeaponType tracking: lưu giá trị mong muốn, áp dụng lại mỗi frame nếu chưa sync
+    // Mặc định = 1 (Pistol) để tránh Rifle idle khi khởi động
+    private int _targetWeaponType  = 1;
+    private int _appliedWeaponType = -1; // -1 = chưa áp dụng
+
+    void Awake()
     {
+        // Khởi tạo sớm trong Awake để kịp trước khi Fusion gọi Spawned()
         _animator      = GetComponentInChildren<Animator>();
         _fpsController = GetComponent<FPSController>();
 
-        // Auto-find WeaponAudio — fix lỗi "missing link" mà team báo cáo
-        // WeaponAudio phải gắn trên cùng GameObject với PlayerAnimatorController
         _weaponAudio = GetComponent<WeaponAudio>();
         if (_weaponAudio == null)
             _weaponAudio = GetComponentInChildren<WeaponAudio>();
         if (_weaponAudio == null)
-            Debug.LogWarning($"[PlayerAnimatorController] WeaponAudio not found on {gameObject.name}. Audio sẽ không hoạt động.");
+            Debug.LogWarning($"[PlayerAnimatorController] WeaponAudio not found on {gameObject.name}.");
     }
 
     void Update()
@@ -31,7 +34,23 @@ public class PlayerAnimatorController : MonoBehaviour
             _ready = true;
         }
 
-        if (_animator == null) return;
+        // Lazy-init nếu Animator chưa sẵn sàng trong Awake
+        if (_animator == null)
+        {
+            _animator = GetComponentInChildren<Animator>();
+            return;
+        }
+
+        // Chỉ set WeaponType khi giá trị thay đổi.
+        // Gọi SetInteger mỗi frame với cùng giá trị vẫn trigger transition evaluation trong Unity Animator,
+        // gây ra "Any State → RifleIdle" tự loop lại (nếu Can Transition To Self = true) → jitter.
+        // Guard này ngăn transition thừa. Nếu jitter vẫn xảy ra → trong Animator Controller Unity,
+        // kiểm tra các transition từ Any State: tắt "Can Transition To Self" và "Has Exit Time".
+        if (_appliedWeaponType != _targetWeaponType)
+        {
+            _animator.SetInteger("WeaponType", _targetWeaponType);
+            _appliedWeaponType = _targetWeaponType;
+        }
 
         float forward = Mathf.Abs(_fpsController.LastForward) < 0.001f ? 0f : _fpsController.LastForward;
         float strafe  = Mathf.Abs(_fpsController.LastStrafe)  < 0.001f ? 0f : _fpsController.LastStrafe;
@@ -56,5 +75,10 @@ public class PlayerAnimatorController : MonoBehaviour
         _weaponAudio?.PlayReloadSound();
     }
 
-    public void SetWeaponType(int type) => _animator?.SetInteger("WeaponType", type);
+    public void SetWeaponType(int type)
+    {
+        _targetWeaponType  = type;
+        _appliedWeaponType = -1; // force re-apply next Update()
+        _animator?.SetInteger("WeaponType", type);
+    }
 }

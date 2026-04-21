@@ -10,16 +10,16 @@ public class GameManager : NetworkBehaviour
     [Header("References")]
     [SerializeField] private TimerManager timerManager;
 
-    [Header("Score UI")]
+    // Score text: để trống OK — GameManager tự tìm theo tên object
+    // Nếu muốn gán tay: kéo Text vào đây
+    [Header("Score UI (để trống → tự tìm bằng tên Text_ScoreA / Text_ScoreB)")]
     [SerializeField] private TextMeshProUGUI teamAScoreText;
     [SerializeField] private TextMeshProUGUI teamBScoreText;
-    [SerializeField] private GameObject      endGamePanel;
-    [SerializeField] private TextMeshProUGUI endGameText;
 
-    [Networked] public int  TeamAScore  { get; set; }
-    [Networked] public int  TeamBScore  { get; set; }
+    [Networked] public int TeamAScore { get; set; }
+    [Networked] public int TeamBScore { get; set; }
     [Networked] public bool GameStarted { get; set; }
-    [Networked] public bool GameEnded   { get; set; }
+    [Networked] public bool GameEnded { get; set; }
 
     private ChangeDetector _changeDetector;
 
@@ -28,51 +28,64 @@ public class GameManager : NetworkBehaviour
         instance = this;
         _changeDetector = GetChangeDetector(ChangeDetector.Source.SimulationState);
 
-        if (endGamePanel != null) endGamePanel.SetActive(false);
+        // Tự tìm Score Text nếu chưa gán
+        if (teamAScoreText == null) teamAScoreText = FindTMP("Text_ScoreA");
+        if (teamBScoreText == null) teamBScoreText = FindTMP("Text_ScoreB");
+        // Tự tìm TimerManager nếu SerializeField chưa kéo trong Inspector
+        if (timerManager == null)
+        {
+            timerManager = FindFirstObjectByType<TimerManager>();
+            if (timerManager == null)
+                Debug.LogWarning("[GM] TimerManager không tìm thấy! Kéo vào Inspector hoặc đặt trong scene.");
+        }
 
         if (!Object.HasStateAuthority) return;
 
-        TeamAScore  = 0;
-        TeamBScore  = 0;
+        TeamAScore = 0;
+        TeamBScore = 0;
         GameStarted = true;
-        GameEnded   = false;
+        GameEnded = false;
 
-        // Dùng coroutine để chờ RoomPlayerData sync xong trước khi đọc config
-        // Tránh đọc giá trị mặc định (0) khi RoomPlayerData chưa sẵn sàng
         StartCoroutine(ApplyLobbyConfig());
+    }
+
+    static TextMeshProUGUI FindTMP(string name)
+    {
+        foreach (var t in FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None))
+            if (t.gameObject.name == name) return t;
+        return null;
     }
 
     IEnumerator ApplyLobbyConfig()
     {
-        // Chờ tối đa 3 giây cho RoomPlayerData
-        float timeout = 3f;
-        while (RoomPlayerData.instance == null && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
+        // Không chờ — áp dụng ngay lập tức để tránh timer nhảy từ 10:00 → 3:00.
+        // TimerManager.Spawned() đã đọc GameConfig, nhưng gọi lại ở đây để đồng bộ nếu
+        // RoomPlayerData vẫn còn sống (hiếm gặp — thường null sau khi load scene).
+        int pistolTime, rifleTime;
 
         if (RoomPlayerData.instance != null)
         {
-            int pistolTime = RoomPlayerData.instance.PistolTime;
-            int rifleTime  = RoomPlayerData.instance.RifleTime;
-            int roundTime  = pistolTime + rifleTime;
-
-            // Chỉ apply nếu có giá trị hợp lệ (> 0)
-            if (roundTime > 0 && timerManager != null)
-            {
-                timerManager.SetTimings(roundTime, pistolTime);
-                Debug.Log($"[GameManager] Config từ lobby: Round={roundTime}s Pistol={pistolTime}s Rifle={rifleTime}s");
-            }
-            else
-            {
-                Debug.LogWarning($"[GameManager] RoomPlayerData có nhưng roundTime={roundTime} — dùng default của TimerManager.");
-            }
+            pistolTime = RoomPlayerData.instance.PistolTime;
+            rifleTime  = RoomPlayerData.instance.RifleTime;
+            Debug.Log($"[GM] Config từ RoomPlayerData: pistol={pistolTime}s rifle={rifleTime}s");
         }
         else
         {
-            Debug.LogWarning("[GameManager] RoomPlayerData không tìm thấy sau 3s — dùng default TimerManager.");
+            pistolTime = GameConfig.PistolTime;
+            rifleTime  = GameConfig.RifleTime;
+            Debug.Log($"[GM] Config từ GameConfig: pistol={pistolTime}s rifle={rifleTime}s");
         }
+
+        int roundTime = pistolTime + rifleTime;
+        if (roundTime > 0 && timerManager != null)
+        {
+            timerManager.SetTimings(roundTime, pistolTime);
+            Debug.Log($"[GM] Timer set: round={roundTime}s pistol={pistolTime}s");
+        }
+        else
+            Debug.LogWarning($"[GM] roundTime={roundTime} hoặc timerManager null — dùng default");
+
+        yield break;
     }
 
     public override void Render()
@@ -87,7 +100,7 @@ public class GameManager : NetworkBehaviour
                     break;
                 case nameof(GameEnded):
                     if (GameEnded) ShowEndGame();
-break;
+                    break;
             }
         }
     }
@@ -96,17 +109,15 @@ break;
     {
         if (!Object.HasStateAuthority) return;
         if (!GameStarted || GameEnded) return;
-        if (timerManager != null && timerManager.IsTimeUp())
-            EndGame();
+        if (timerManager != null && timerManager.IsTimeUp()) EndGame();
     }
 
     public void RegisterKill(int killerTeam)
     {
-        if (!Object.HasStateAuthority) return;
-        if (GameEnded) return;
+        if (!Object.HasStateAuthority || GameEnded) return;
         if (killerTeam == 0) TeamAScore++;
-        else                 TeamBScore++;
-        Debug.Log($"[GameManager] Kill. TeamA={TeamAScore} TeamB={TeamBScore}");
+        else TeamBScore++;
+        Debug.Log($"[GM] Kill — Xanh={TeamAScore} Đỏ={TeamBScore}");
     }
 
     void EndGame()
@@ -116,37 +127,31 @@ break;
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    void RPC_NotifyGameEnd(int scoreA, int scoreB)
-    {
-        ShowEndGameResult(scoreA, scoreB);
-    }
+    void RPC_NotifyGameEnd(int scoreA, int scoreB) => ShowEndGameResult(scoreA, scoreB);
 
     void ShowEndGame() => ShowEndGameResult(TeamAScore, TeamBScore);
 
     void ShowEndGameResult(int scoreA, int scoreB)
     {
         Cursor.lockState = CursorLockMode.None;
-        Cursor.visible   = true;
+        Cursor.visible = true;
 
         string result;
-        if (scoreA > scoreB)      result = "TEAM A THẮNG!";
-        else if (scoreB > scoreA) result = "TEAM B THẮNG!";
-        else                      result = "HÒA!";
+        if (scoreA > scoreB) result = "TEAM XANH THẮNG!";
+        else if (scoreB > scoreA) result = "TEAM ĐỎ THẮNG!";
+        else result = "HÒA!";
 
-        if (EndRoundUI.instance != null)
-            EndRoundUI.instance.ShowResult(result, scoreA, scoreB);
-        else
-        {
-            if (endGamePanel != null) endGamePanel.SetActive(true);
-            if (endGameText  != null) endGameText.text = $"{result}\n{scoreA} - {scoreB}";
-        }
+        var endUI = FindFirstObjectByType<EndRoundUI>();
+        if (endUI != null) endUI.ShowResult(result, scoreA, scoreB);
+        else Debug.LogWarning("[GM] EndRoundUI không tìm thấy!");
 
-        Debug.Log($"[GameManager] Game ended. A={scoreA} B={scoreB}");
+        Debug.Log($"[GM] Ended — Xanh={scoreA} Đỏ={scoreB}");
     }
 
     void UpdateScoreUI()
     {
         if (teamAScoreText != null) teamAScoreText.text = TeamAScore.ToString();
         if (teamBScoreText != null) teamBScoreText.text = TeamBScore.ToString();
+        FindFirstObjectByType<ScoreboardUI>()?.Refresh();
     }
 }

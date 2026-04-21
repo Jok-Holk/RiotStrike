@@ -8,23 +8,31 @@ public class TimerManager : NetworkBehaviour
     public TextMeshProUGUI phaseText;
     public TextMeshProUGUI timerText;
 
-    [Networked] private float _networkTime   { get; set; }
-    [Networked] private bool  _rifleUnlocked { get; set; }
+    [Networked] private float _networkTime { get; set; }
+    [Networked] private bool _rifleUnlocked { get; set; }
 
     [Header("Settings — set từ HostConfigManager")]
-    public float totalTime          = 600f;
+    public float totalTime = 600f;
     public float pistolOnlyDuration = 120f;
 
     private bool _initialized = false;
 
     public bool IsTimeUp() => _networkTime <= 0f;
+    public float GetRemainingTime() => Mathf.Max(0f, _networkTime); // dùng cho ScoreboardUI
 
     public override void Spawned()
     {
         if (Object.HasStateAuthority)
         {
-            _networkTime   = totalTime;
-            _rifleUnlocked = false;
+            // Đọc từ GameConfig (lưu trước khi load scene) thay vì dùng Inspector default (600s).
+            // Tránh trường hợp timer hiện 10:00 rồi nhảy về 3:00 khi GameManager apply config sau.
+            float configRound  = GameConfig.RoundTime  > 0 ? GameConfig.RoundTime  : totalTime;
+            float configPistol = GameConfig.PistolTime > 0 ? GameConfig.PistolTime : pistolOnlyDuration;
+            totalTime           = configRound;
+            pistolOnlyDuration  = configPistol;
+            _networkTime        = configRound;
+            _rifleUnlocked      = false;
+            Debug.Log($"[TimerManager] Spawned: networkTime={_networkTime}s pistolOnly={pistolOnlyDuration}s (from GameConfig)");
         }
         _initialized = true;
     }
@@ -51,9 +59,9 @@ public class TimerManager : NetworkBehaviour
 
     void UpdateUI()
     {
-        float t       = Mathf.Max(0, _networkTime);
-        int   minutes = Mathf.FloorToInt(t / 60);
-        int   seconds = Mathf.FloorToInt(t % 60);
+        float t = Mathf.Max(0, _networkTime);
+        int minutes = Mathf.FloorToInt(t / 60);
+        int seconds = Mathf.FloorToInt(t % 60);
 
         if (timerText) timerText.text = $"{minutes:00}:{seconds:00}";
 
@@ -61,13 +69,13 @@ public class TimerManager : NetworkBehaviour
         {
             if (_rifleUnlocked)
             {
-                phaseText.text  = "RIFLE UNLOCKED";
+                phaseText.text = "RIFLE UNLOCKED";
                 phaseText.color = Color.green;
                 if (timerText) timerText.color = Color.green;
             }
             else
             {
-                phaseText.text  = "PISTOL ONLY";
+                phaseText.text = "PISTOL ONLY";
                 phaseText.color = Color.yellow;
                 if (timerText) timerText.color = Color.yellow;
             }
@@ -85,9 +93,10 @@ public class TimerManager : NetworkBehaviour
     public void SetTimings(float roundTime, float pistolTime)
     {
         if (!Object.HasStateAuthority) return;
-        totalTime          = roundTime;
+        totalTime = roundTime;
         pistolOnlyDuration = pistolTime;
-        _networkTime       = roundTime;
-        _rifleUnlocked     = false;
+        _networkTime = roundTime;
+        _rifleUnlocked = false;
+        Debug.Log($"[TimerManager] SetTimings: round={roundTime}s pistol={pistolTime}s");
     }
 }

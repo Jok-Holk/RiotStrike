@@ -312,6 +312,13 @@ public class UIRoomManager : MonoBehaviour
             return;
         }
 
+        // Push slider mới nhất lên RoomPlayerData
+        FindFirstObjectByType<HostConfigManager>()?.UpdateConfig();
+
+        // Lưu config vào static GameConfig trước khi load scene
+        // (RoomPlayerData có thể null trong game scene do scene transition)
+        GameConfig.SaveFromRoomData();
+
         LobbyManager.instance.StartGame();
     }
 }
