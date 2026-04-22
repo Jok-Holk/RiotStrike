@@ -1,0 +1,3556 @@
+﻿// ========== D:\work\RiotStrike\Assets\_Project\Editor\AnimationClipRenamer.cs ==========
+// AnimationClipRenamer.cs
+using UnityEngine;
+using UnityEditor;
+using System.IO;
+
+public class AnimationClipRenamer : EditorWindow
+{
+    [MenuItem("RiotStrike/Rename Animation Clips")]
+    public static void RenameAllClips()
+    {
+        string[] folders = {
+            "Assets/_Project/Animations/Rifle",
+            "Assets/_Project/Animations/Pistol",
+            "Assets/_Project/Animations/Pistol/In-Place",
+            "Assets/_Project/Animations/Pistol/Fire",
+            "Assets/_Project/Animations/Pistol/Aim_Offsets",
+            "Assets/_Project/Animations/Pistol/In-Place/Split_Jumps",
+        };
+
+        int count = 0;
+        foreach (string folder in folders)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Object", new[] { folder });
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)) continue;
+
+                string fileName = Path.GetFileNameWithoutExtension(path);
+                var assets = AssetDatabase.LoadAllAssetsAtPath(path);
+
+                foreach (var asset in assets)
+                {
+                    if (!(asset is AnimationClip clip)) continue;
+                    if (clip.name.StartsWith("__preview__")) continue;
+                    if (clip.name == fileName) continue;
+
+                    clip.name = fileName;
+                    EditorUtility.SetDirty(clip);
+                    count++;
+                    Debug.Log($"Renamed: '{clip.name}' → '{fileName}' ({path})");
+                }
+            }
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log($"Done. Renamed {count} clips.");
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Editor\BatchAnimationImporter.cs ==========
+using UnityEngine;
+using UnityEditor;
+using UnityEditor.Animations;
+using System.IO;
+using System.Collections.Generic;
+
+public class BatchAnimationImporter : EditorWindow
+{
+    public Avatar sourceAvatar;
+
+    [MenuItem("RiotStrike/Batch Fix Animation Import")]
+    public static void OpenWindow()
+    {
+        GetWindow<BatchAnimationImporter>("Batch Anim Importer");
+    }
+
+    void OnGUI()
+    {
+        GUILayout.Label("KÃ©o Avatar cá»§a Vanguard model vÃ o Ä‘Ã¢y:", EditorStyles.boldLabel);
+        sourceAvatar = (Avatar)EditorGUILayout.ObjectField("Source Avatar", sourceAvatar, typeof(Avatar), false);
+
+        if (sourceAvatar == null)
+        {
+            EditorGUILayout.HelpBox("ChÆ°a cÃ³ Avatar! KÃ©o VanguardAvatar vÃ o trÆ°á»›c.", MessageType.Warning);
+        }
+
+        if (GUILayout.Button("1. Create Upper Body Mask"))
+            CreateUpperBodyMask();
+
+        EditorGUI.BeginDisabledGroup(sourceAvatar == null);
+        if (GUILayout.Button("2. Batch Fix All Animations"))
+            FixAll(sourceAvatar);
+        EditorGUI.EndDisabledGroup();
+
+        if (GUILayout.Button("3. Run Both"))
+        {
+            CreateUpperBodyMask();
+            if (sourceAvatar != null) FixAll(sourceAvatar);
+        }
+    }
+
+    static void CreateUpperBodyMask()
+    {
+        string maskPath = "Assets/_Project/Animations/UpperBodyMask.mask";
+
+        // XoÃ¡ file cÅ© náº¿u tá»“n táº¡i
+        if (File.Exists(maskPath))
+        {
+            AssetDatabase.DeleteAsset(maskPath);
+            AssetDatabase.Refresh();
+        }
+
+        AvatarMask mask = new AvatarMask();
+
+        // Táº¯t táº¥t cáº£ body parts trÆ°á»›c
+        for (int i = 0; i < (int)AvatarMaskBodyPart.LastBodyPart; i++)
+            mask.SetHumanoidBodyPartActive((AvatarMaskBodyPart)i, false);
+
+        // Báº­t chá»‰ Upper Body cho FPS weapon layer
+        // Root vÃ  Hips Táº®T - Ä‘á»ƒ Base Layer control locomotion
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.Body, true);        // Spine/Chest
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.Head, true);        // Head/Neck
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.LeftArm, true);     // Left arm
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.RightArm, true);    // Right arm
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.LeftFingers, true); // Left fingers
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.RightFingers, true);// Right fingers
+
+        // Táº¯t hoÃ n toÃ n Lower Body
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.Root, false);
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.LeftLeg, false);
+        mask.SetHumanoidBodyPartActive(AvatarMaskBodyPart.RightLeg, false);
+
+        AssetDatabase.CreateAsset(mask, maskPath);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log("UpperBodyMask created at: " + maskPath);
+    }
+
+    static void FixAll(Avatar sourceAvatar)
+    {
+        string[] folders = {
+            "Assets/_Project/Animations/Rifle",
+            "Assets/_Project/Animations/Pistol",
+        };
+
+        var loopSet = new HashSet<string> {
+            // Rifle locomotion
+            "Rifle Aiming Idle", "Walking", "Walking Backwards", "Walk With Rifle",
+            "Strafe Left", "Strafe Right", "Rifle Run", "Rifle Idle",
+            "Idle Crouching Aiming", "Rifle Crouch Walk", "Walk Crouching Backward",
+            "Walk Crouching Forward", "Crouch Walk Strafe Left", "Crouch Walk Strafe Right",
+            // Pistol locomotion
+            "Pistol Idle", "Pistol Walk", "Pistol Walk Backward",
+            "Pistol Strafe Left", "Pistol Strafe Right", "Pistol Run",
+            "Pistol Kneeling Idle", "Pistol Left Strafe", "Pistol Right Strafe",
+            // W1 locomotion loops
+            "W1_Stand_Aim_Idle_IPC", "W1_Crouch_Aim_Idle_IPC", "W1_Crouch_Idle_IPC",
+            "W1_Walk_Aim_F_Loop_IPC", "W1_CrouchWalk_Aim_F_Loop_IPC",
+            "W1_Jog_Aim_F_Loop_IPC", "W1_Stand_Relaxed_Idle_IPC",
+            "W1_Stand_Aim_Turn_In_Place_L_Loop_IPC", "W1_Stand_Aim_Turn_In_Place_R_Loop_IPC",
+        };
+
+        // Clip 1 láº§n (khÃ´ng loop)
+        var oneShot = new HashSet<string> {
+            "Firing Rifle", "Fire Crouch Rifle", "Crouch Rapid Fire",
+            "Reloading", "Reload", "Crouch Reloading",
+            "Hit Reaction", "Crouch Hit React",
+            "Dying", "Crouch Death", "Walking To Dying",
+            "Stand To Crouch", "Crouch To Standing With Rifle",
+            "Pistol Jump",
+            "W1_Stand_Fire_Single", "W1_Crouch_Fire_Single",
+            "W1_Stand_Aim_Jump_Start_IPC", "W1_Stand_Aim_Jump_Air_IPC",
+            "W1_Stand_Aim_Jump_End_IPC", "W1_Walk_Aim_F_Jump_RU_End_IPC",
+            "W1_Jog_Aim_F_Jump_RU_End_IPC",
+        };
+
+        string[] guids = AssetDatabase.FindAssets("t:Object", folders);
+        int count = 0;
+
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (!path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)) continue;
+
+            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
+            if (importer == null) continue;
+
+            string clipName = Path.GetFileNameWithoutExtension(path);
+            bool isW1 = clipName.StartsWith("W1_");
+            bool needsLoop = loopSet.Contains(clipName);
+
+            // Rig
+            importer.animationType = ModelImporterAnimationType.Human;
+            if (isW1)
+            {
+                // W1_ clips cÃ³ bone naming khÃ¡c - táº¡o avatar riÃªng
+                importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            }
+            else
+            {
+                // Mixamo clips - copy tá»« Vanguard
+                importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
+                importer.sourceAvatar = sourceAvatar;
+            }
+
+            // Clips
+            if (importer.clipAnimations == null || importer.clipAnimations.Length == 0)
+                importer.clipAnimations = importer.defaultClipAnimations;
+
+            var clips = importer.clipAnimations;
+            foreach (var clip in clips)
+            {
+                if (clip.name.StartsWith("__preview__")) continue;
+
+                clip.loopTime = needsLoop;
+                clip.loopPose = needsLoop;
+
+                // Bake root motion vÃ o pose - khÃ´ng cho character trÆ°á»£t
+                clip.lockRootRotation = true;
+                clip.lockRootHeightY = true;
+                clip.lockRootPositionXZ = true;
+
+                clip.keepOriginalOrientation = false;
+                clip.keepOriginalPositionY = false;
+                clip.keepOriginalPositionXZ = false;
+            }
+
+            importer.clipAnimations = clips;
+            importer.SaveAndReimport();
+            count++;
+            Debug.Log($"Fixed: {clipName} | Loop={needsLoop} | W1={isW1}");
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log($"Done. Fixed {count} FBX files.");
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Editor\PlayerAnimatorSetup.cs ==========
+// PlayerAnimatorSetup.cs
+using UnityEngine;
+using UnityEditor;
+using UnityEditor.Animations;
+using System.IO;
+
+public class PlayerAnimatorSetup : EditorWindow
+{
+    [MenuItem("RiotStrike/Setup Player Animator")]
+    public static void SetupAnimator()
+    {
+        string animPath = "Assets/_Project/Animations";
+        string controllerPath = "Assets/_Project/Animations/PlayerAnimator.controller";
+        string maskPath = "Assets/_Project/Animations/UpperBodyMask.mask";
+
+        if (File.Exists(controllerPath))
+        {
+            AssetDatabase.DeleteAsset(controllerPath);
+            AssetDatabase.Refresh();
+        }
+
+        AnimatorController c = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+
+        c.AddParameter("Forward",    AnimatorControllerParameterType.Float);
+        c.AddParameter("Strafe",     AnimatorControllerParameterType.Float);
+        c.AddParameter("Crouch",     AnimatorControllerParameterType.Bool);
+        c.AddParameter("IsGrounded", AnimatorControllerParameterType.Bool);
+        c.AddParameter("Death",      AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Hit",        AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Fire",       AnimatorControllerParameterType.Trigger);
+        c.AddParameter("Reload",     AnimatorControllerParameterType.Trigger);
+        c.AddParameter("WeaponType", AnimatorControllerParameterType.Int); // 0=Rifle, 1=Pistol
+
+        SetupBaseLayer(c, animPath);
+        SetupWeaponLayer(c, animPath, maskPath);
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log("PlayerAnimator setup complete! (Jump removed)");
+    }
+
+    // ─── BASE LAYER (locomotion full body) ───────────────────────────────────
+    static void SetupBaseLayer(AnimatorController c, string p)
+    {
+        var sm = c.layers[0].stateMachine;
+        sm.entryPosition    = new Vector2(-300, 0);
+        sm.anyStatePosition = new Vector2(-300, 80);
+        sm.exitPosition     = new Vector2(-300, 160);
+
+        // Stand Blend Tree
+        var standState = sm.AddState("Stand", new Vector2(100, 0));
+        standState.motion = BuildLocomotionTree(c, p, false);
+        sm.defaultState = standState;
+
+        // Crouch Blend Tree
+        var crouchState = sm.AddState("Crouch", new Vector2(100, 140));
+        crouchState.motion = BuildLocomotionTree(c, p, true);
+
+        // Stand ↔ Crouch
+        var toC = standState.AddTransition(crouchState);
+        toC.hasExitTime = false; toC.duration = 0.15f;
+        toC.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
+
+        var toS = crouchState.AddTransition(standState);
+        toS.hasExitTime = false; toS.duration = 0.15f;
+        toS.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
+
+        // Death
+        var deathState = sm.AddState("Death", new Vector2(350, 140));
+        deathState.motion = LoadClip(p + "/Rifle/Dying.fbx");
+        var deathIn = sm.AddAnyStateTransition(deathState);
+        deathIn.hasExitTime = false; deathIn.duration = 0.1f;
+        deathIn.canTransitionToSelf = false;
+        deathIn.AddCondition(AnimatorConditionMode.If, 0, "Death");
+
+        var layers = c.layers;
+        layers[0].stateMachine = sm;
+        c.layers = layers;
+    }
+
+    static BlendTree BuildLocomotionTree(AnimatorController c, string p, bool crouch)
+    {
+        var tree = new BlendTree();
+        AssetDatabase.AddObjectToAsset(tree, c);
+        tree.name = crouch ? "CrouchLocomotion" : "StandLocomotion";
+        tree.blendType           = BlendTreeType.FreeformCartesian2D;
+        tree.blendParameter      = "Strafe";
+        tree.blendParameterY     = "Forward";
+        tree.useAutomaticThresholds = false;
+
+        if (!crouch)
+        {
+            // Stand — forward/back/strafe/run — không có jump
+            AddMotion(tree, c, p + "/Rifle/Rifle Aiming Idle.fbx",   0,  0);
+            AddMotion(tree, c, p + "/Rifle/Walk With Rifle.fbx",      0,  1);
+            AddMotion(tree, c, p + "/Rifle/Walking Backwards.fbx",    0, -1);
+            AddMotion(tree, c, p + "/Rifle/Strafe Left.fbx",         -1,  0);
+            AddMotion(tree, c, p + "/Rifle/Strafe Right.fbx",         1,  0);
+            AddMotion(tree, c, p + "/Rifle/Rifle Run.fbx",            0,  2); // sprint
+        }
+        else
+        {
+            AddMotion(tree, c, p + "/Rifle/Idle Crouching Aiming.fbx",    0,  0);
+            AddMotion(tree, c, p + "/Rifle/Walk Crouching Forward.fbx",   0,  1);
+            AddMotion(tree, c, p + "/Rifle/Walk Crouching Backward.fbx",  0, -1);
+            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Left.fbx",  -1, 0);
+            AddMotion(tree, c, p + "/Rifle/Crouch Walk Strafe Right.fbx",  1, 0);
+        }
+
+        return tree;
+    }
+
+    // ─── WEAPON LAYER (upper body override) ──────────────────────────────────
+    static void SetupWeaponLayer(AnimatorController c, string p, string maskPath)
+    {
+        var wLayer = new AnimatorControllerLayer();
+        wLayer.name          = "WeaponLayer";
+        wLayer.defaultWeight = 1f;
+        wLayer.blendingMode  = AnimatorLayerBlendingMode.Override;
+
+        var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(maskPath);
+        if (mask != null) wLayer.avatarMask = mask;
+        else Debug.LogWarning("UpperBodyMask not found: " + maskPath);
+
+        var sm = new AnimatorStateMachine();
+        sm.name = "WeaponLayer";
+        AssetDatabase.AddObjectToAsset(sm, c);
+        sm.hideFlags        = HideFlags.HideInHierarchy;
+        sm.entryPosition    = new Vector2(-300, 0);
+        sm.anyStatePosition = new Vector2(-300, 80);
+        wLayer.stateMachine = sm;
+
+        // ── Rifle Idle (default) ──
+        var rifleIdle = sm.AddState("RifleIdle", new Vector2(0, 0));
+        rifleIdle.motion = LoadClip(p + "/Rifle/Rifle Aiming Idle.fbx");
+        sm.defaultState = rifleIdle;
+
+        // ── Pistol Idle ──
+        var pistolIdle = sm.AddState("PistolIdle", new Vector2(0, 140));
+        pistolIdle.motion = LoadClip(p + "/Pistol/In-Place/W1_Stand_Aim_Idle_IPC.fbx");
+
+        // Rifle ↔ Pistol switch
+        AddWeaponSwitch(rifleIdle,  pistolIdle, "WeaponType", 1);
+        AddWeaponSwitch(pistolIdle, rifleIdle,  "WeaponType", 0);
+
+        // ── Rifle Fire (stand) ──
+        var rifleFire = sm.AddState("RifleFire", new Vector2(300, 0));
+        rifleFire.motion = LoadClip(p + "/Rifle/Firing Rifle.fbx");
+        AddAnyTrigger(sm, rifleFire, "Fire", "WeaponType", 0, false);
+        AddExitToState(rifleFire, rifleIdle, 1f, 0.05f);
+
+        // ── Rifle Fire (crouch) ──
+        var rifleCrouchFire = sm.AddState("RifleCrouchFire", new Vector2(300, 70));
+        rifleCrouchFire.motion = LoadClip(p + "/Rifle/Fire Crouch Rifle.fbx");
+        AddAnyTrigger(sm, rifleCrouchFire, "Fire", "WeaponType", 0, true);
+        AddExitToState(rifleCrouchFire, rifleIdle, 1f, 0.1f);
+
+        // ── Rifle Reload (stand) ──
+        var rifleReload = sm.AddState("RifleReload", new Vector2(300, 140));
+        rifleReload.motion = LoadClip(p + "/Rifle/Reloading.fbx");
+        AddAnyTrigger(sm, rifleReload, "Reload", "WeaponType", 0, false);
+        AddExitToState(rifleReload, rifleIdle, 1f, 0.1f);
+
+        // ── Rifle Reload (crouch) ──
+        var rifleCrouchReload = sm.AddState("RifleCrouchReload", new Vector2(300, 210));
+        rifleCrouchReload.motion = LoadClip(p + "/Rifle/Crouch Reloading.fbx");
+        AddAnyTrigger(sm, rifleCrouchReload, "Reload", "WeaponType", 0, true);
+        AddExitToState(rifleCrouchReload, rifleIdle, 1f, 0.1f);
+
+        // ── Pistol Fire (stand) ──
+        var pistolFire = sm.AddState("PistolFire", new Vector2(0, 280));
+        pistolFire.motion = LoadClip(p + "/Pistol/Fire/W1_Stand_Fire_Single.fbx");
+        AddAnyTrigger(sm, pistolFire, "Fire", "WeaponType", 1, false);
+        AddExitToState(pistolFire, pistolIdle, 1f, 0.05f);
+
+        // ── Pistol Fire (crouch) ──
+        var pistolCrouchFire = sm.AddState("PistolCrouchFire", new Vector2(0, 350));
+        pistolCrouchFire.motion = LoadClip(p + "/Pistol/Fire/W1_Crouch_Fire_Single.fbx");
+        AddAnyTrigger(sm, pistolCrouchFire, "Fire", "WeaponType", 1, true);
+        AddExitToState(pistolCrouchFire, pistolIdle, 1f, 0.05f);
+
+        // ── Pistol Reload ──
+        var pistolReload = sm.AddState("PistolReload", new Vector2(0, 420));
+        pistolReload.motion = LoadClip(p + "/Rifle/Reloading.fbx"); // dùng tạm rifle reload
+        AddAnyTrigger(sm, pistolReload, "Reload", "WeaponType", 1, false);
+        AddExitToState(pistolReload, pistolIdle, 1f, 0.1f);
+
+        // ── Hit Reaction ──
+        var hitState = sm.AddState("Hit", new Vector2(600, 0));
+        hitState.motion = LoadClip(p + "/Rifle/Hit Reaction.fbx");
+        var hitTrans = sm.AddAnyStateTransition(hitState);
+        hitTrans.hasExitTime = false; hitTrans.duration = 0.05f;
+        hitTrans.canTransitionToSelf = false;
+        hitTrans.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+        hitTrans.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
+        AddExitToState(hitState, rifleIdle, 0.9f, 0.1f);
+
+        // ── Crouch Hit ──
+        var crouchHit = sm.AddState("CrouchHit", new Vector2(600, 70));
+        crouchHit.motion = LoadClip(p + "/Rifle/Crouch Hit React.fbx");
+        var chtTrans = sm.AddAnyStateTransition(crouchHit);
+        chtTrans.hasExitTime = false; chtTrans.duration = 0.05f;
+        chtTrans.canTransitionToSelf = false;
+        chtTrans.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+        chtTrans.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
+        AddExitToState(crouchHit, rifleIdle, 0.9f, 0.1f);
+
+        var layers = new System.Collections.Generic.List<AnimatorControllerLayer>(c.layers);
+        layers.Add(wLayer);
+        c.layers = layers.ToArray();
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+    static void AddMotion(BlendTree tree, AnimatorController c, string path, float x, float y)
+    {
+        var clip = LoadClip(path);
+        if (clip == null) { Debug.LogWarning("Clip not found: " + path); return; }
+        tree.AddChild(clip, new Vector2(x, y));
+    }
+
+    static void AddWeaponSwitch(AnimatorState from, AnimatorState to, string param, int value)
+    {
+        var t = from.AddTransition(to);
+        t.hasExitTime = false; t.duration = 0.1f;
+        t.AddCondition(AnimatorConditionMode.Equals, value, param);
+    }
+
+    /// <summary>
+    /// crouch=true thêm condition Crouch=true, crouch=false thêm Crouch=false
+    /// để state stand và crouch không lẫn nhau
+    /// </summary>
+    static void AddAnyTrigger(AnimatorStateMachine sm, AnimatorState target,
+        string trigger, string weaponParam, int weaponValue, bool crouch)
+    {
+        var t = sm.AddAnyStateTransition(target);
+        t.hasExitTime = false; t.duration = 0.05f;
+        t.canTransitionToSelf = false;
+        t.AddCondition(AnimatorConditionMode.If, 0, trigger);
+        t.AddCondition(AnimatorConditionMode.Equals, weaponValue, weaponParam);
+        if (crouch)
+            t.AddCondition(AnimatorConditionMode.If, 0, "Crouch");
+        else
+            t.AddCondition(AnimatorConditionMode.IfNot, 0, "Crouch");
+    }
+
+    static void AddExitToState(AnimatorState from, AnimatorState to, float exitTime, float duration)
+    {
+        var t = from.AddTransition(to);
+        t.hasExitTime = true;
+        t.exitTime    = exitTime;
+        t.duration    = duration;
+    }
+
+    static AnimationClip LoadClip(string path)
+    {
+        foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(path))
+            if (obj is AnimationClip ac && !ac.name.StartsWith("__preview__"))
+                return ac;
+        Debug.LogWarning("No clip at: " + path);
+        return null;
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Data\PlayerProfile.cs ==========
+using System;
+
+[Serializable]
+public class PlayerProfile
+{
+    public string nickName;
+    public int team;
+    public int kills;
+    public int deaths;
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Data\RoomProfile.cs ==========
+using System;
+
+[Serializable]
+public class RoomProfile
+{
+    public string name;
+    public int playerCount;
+    public int maxPlayers;
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\CameraHeadAttacher.cs ==========
+using Fusion;
+using UnityEngine;
+
+public class CameraHeadAttacher : NetworkBehaviour
+{
+    [SerializeField] private Vector3 offset = new Vector3(0, 0.1f, 0.15f);
+
+    private Transform _headBone;
+    private Transform _cameraTarget;
+
+    public override void Spawned()
+    {
+        if (!Object.HasInputAuthority) return;
+
+        // TÃ¬m Camera má»™t cÃ¡ch an toÃ n
+        var cam = GetComponentInChildren<Camera>();
+        if (cam != null)
+        {
+            _cameraTarget = cam.transform;
+        }
+        else
+        {
+            Debug.LogWarning("[CameraHeadAttacher] Ca nÃ£o tÃ¬m tháº¥y Camera trong player prefab. Script sáº½ khÃ´ng follow head bone.");
+            _cameraTarget = null;
+        }
+
+        var animator = GetComponentInParent<Animator>();
+        if (animator == null)
+            animator = transform.parent?.GetComponentInChildren<Animator>();
+
+        if (animator != null)
+            _headBone = animator.GetBoneTransform(HumanBodyBones.Head);
+
+        if (_headBone != null)
+            Debug.Log($"[CameraHolder] Head bone: {_headBone.name}");
+        else
+            Debug.LogWarning("[CameraHolder] Head bone not found!");
+    }
+
+    void LateUpdate()
+    {
+        if (!Object.HasInputAuthority) return;
+        if (_headBone == null || _cameraTarget == null) return;
+
+        // Follow head bone á»Ÿ vá»‹ trÃ­ camera, khÃ´ng override object gá»‘c cá»§a player
+        _cameraTarget.position = _headBone.TransformPoint(offset);
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\FPSCamera.cs ==========
+using Fusion;
+using UnityEngine;
+
+public class FPSCamera : NetworkBehaviour
+{
+    [SerializeField] private float sensitivity = 1f;
+
+    private float _xRotation, _yRotation;
+    private bool _hasAuthority, _initialized;
+    private Transform _bodyTransform;
+
+    public float Yaw => _yRotation;
+    public float Pitch => _xRotation;
+
+    public void Initialize(bool hasInputAuthority)
+    {
+        _hasAuthority = hasInputAuthority;
+        _bodyTransform = transform.parent.parent;
+        _initialized = true;
+
+        var cam = GetComponent<Camera>();
+        var audio = GetComponent<AudioListener>();
+
+        if (_hasAuthority)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+            _xRotation = 0f;
+            _yRotation = _bodyTransform != null ? _bodyTransform.eulerAngles.y : 0f;
+            if (cam) cam.enabled = true;
+            if (audio) audio.enabled = true;
+        }
+        else
+        {
+            if (cam) cam.enabled = false;
+            if (audio) audio.enabled = false;
+        }
+    }
+
+    // Gọi từ Update() của InputProvider hoặc tự gọi ở đây
+    void Update()
+    {
+        if (!_hasAuthority || !_initialized) return;
+
+        // Raw delta pixel từ OS, không bị Unity smooth hay clamp
+        float mouseX = Input.GetAxisRaw("Mouse X") * sensitivity;
+        float mouseY = Input.GetAxisRaw("Mouse Y") * sensitivity;
+
+        _xRotation -= mouseY;
+        _xRotation = Mathf.Clamp(_xRotation, -90f, 90f);
+        _yRotation += mouseX;
+
+        // Apply visual ngay lập tức mỗi frame
+        transform.localRotation = Quaternion.Euler(_xRotation, 0f, 0f);
+        if (_bodyTransform != null)
+            _bodyTransform.rotation = Quaternion.Euler(0f, _yRotation, 0f);
+    }
+
+    // Giữ để FPSController lấy Yaw gửi vào NetworkInputData
+    public void ApplyInput(NetworkInputData input, float deltaTime) { }
+    public void ApplyVisual() { }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\FPSController.cs ==========
+using Fusion;
+using UnityEngine;
+
+[RequireComponent(typeof(CharacterController))]
+public class FPSController : NetworkBehaviour
+{
+    [Header("Movement")]
+    [SerializeField] private float walkSpeed    = 4f;
+    [SerializeField] private float runSpeed     = 7f;
+    [SerializeField] private float crouchSpeed  = 2f;
+
+    [Header("Crouch")]
+    [SerializeField] private float standHeight           = 2f;
+    [SerializeField] private float crouchHeight          = 1f;
+    [SerializeField] private float crouchTransitionSpeed = 8f;
+
+    [SerializeField] private float gravity = -20f;
+
+    [Networked] public float NetworkedYaw { get; set; }
+    [Networked] private bool _isCrouching { get; set; }
+
+    private Vector3             _velocity;
+    private CharacterController _cc;
+    private FPSCamera           _fpsCamera;
+    private float               _targetHeight;
+    private bool                _hasLandedOnce;
+
+    public float LastForward { get; private set; }
+    public float LastStrafe  { get; private set; }
+    public bool  IsCrouching => _isCrouching;
+
+    public void InitSpawnPosition(Vector3 pos)
+    {
+        if (_cc == null) _cc = GetComponent<CharacterController>();
+        _cc.enabled        = false;
+        transform.position = pos;
+        _cc.enabled        = true;
+        _velocity          = new Vector3(0f, -2f, 0f);
+        _hasLandedOnce     = false;
+    }
+
+    public override void Spawned()
+    {
+        _cc            = GetComponent<CharacterController>();
+        _fpsCamera     = GetComponentInChildren<FPSCamera>();
+        _targetHeight  = standHeight;
+        _velocity      = new Vector3(0f, -2f, 0f);
+        _hasLandedOnce = false;
+
+        _fpsCamera?.Initialize(Object.HasInputAuthority);
+
+        // CC chỉ enable trên StateAuthority — host tính physics
+        _cc.enabled = Object.HasStateAuthority;
+
+        if (Object.HasInputAuthority)
+        {
+            var ip = FindFirstObjectByType<InputProvider>();
+            if (ip != null) ip.SetCamera(_fpsCamera);
+
+            foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>())
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        }
+
+        if (FindFirstObjectByType<PlayerDebugLogger>() == null)
+            new GameObject("PlayerDebugLogger").AddComponent<PlayerDebugLogger>();
+        PlayerDebugLogger.Register(this);
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        PlayerDebugLogger.Unregister(this);
+    }
+
+    public override void FixedUpdateNetwork()
+{
+    if (!GetInput(out NetworkInputData input)) {
+        Debug.Log("[SERVER] Không nhận được input từ client");
+        return;
+    }
+
+    Debug.Log($"[SERVER] Nhận input: MoveDirection = {input.MoveDirection}, Sprint = {input.Sprint}, Crouch = {input.Crouch}, Yaw = {input.Yaw}");
+
+    // Yaw sync qua network để remote players thấy đúng hướng
+    NetworkedYaw = input.Yaw;
+
+    // Physics và movement chỉ chạy trên host
+    if (Object.HasStateAuthority)
+    {
+        Debug.Log("[SERVER] Đang xử lý movement cho player có StateAuthority");
+        transform.rotation = Quaternion.Euler(0f, NetworkedYaw, 0f);
+        HandleCrouch(input);
+        HandleMovement(input);
+        ApplyGravity();
+    }
+
+    // Animation values set trên cả local player (InputAuthority)
+    LastForward = input.MoveDirection.y;
+    LastStrafe  = input.MoveDirection.x;
+
+    Debug.Log($"[CLIENT/LOCAL] Animation update: Forward = {LastForward}, Strafe = {LastStrafe}");
+}
+
+
+    public override void Render()
+    {
+        // Remote player: lerp rotation
+        if (!Object.HasInputAuthority)
+        {
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                Quaternion.Euler(0f, NetworkedYaw, 0f),
+                Time.deltaTime * 25f);
+        }
+        // Local player: FPSCamera.Update() tự handle camera visual
+        // Body rotation được FPSCamera set trực tiếp — không cần làm gì thêm
+    }
+
+    void HandleCrouch(NetworkInputData input)
+    {
+        if (input.Crouch != _isCrouching)
+        {
+            _isCrouching  = input.Crouch;
+            _targetHeight = _isCrouching ? crouchHeight : standHeight;
+        }
+        _cc.height = Mathf.Lerp(_cc.height, _targetHeight, Runner.DeltaTime * crouchTransitionSpeed);
+    }
+
+    void HandleMovement(NetworkInputData input)
+    {
+        bool isSprinting = input.Sprint && !_isCrouching && input.MoveDirection.y > 0;
+        float speed      = _isCrouching ? crouchSpeed : (isSprinting ? runSpeed : walkSpeed);
+        Vector2 dir      = input.MoveDirection;
+        if (dir.magnitude > 1f) dir.Normalize();
+        Vector3 move = transform.right * dir.x + transform.forward * dir.y;
+        _cc.Move(move * speed * Runner.DeltaTime);
+    }
+
+    void ApplyGravity()
+    {
+        if (!_hasLandedOnce)
+        {
+            _velocity.y = -2f;
+            _cc.Move(_velocity * Runner.DeltaTime);
+            if (_cc.isGrounded) _hasLandedOnce = true;
+            return;
+        }
+        if (_cc.isGrounded && _velocity.y < 0)
+            _velocity.y = -2f;
+        _velocity.y += gravity * Runner.DeltaTime;
+        _cc.Move(_velocity * Runner.DeltaTime);
+    }
+
+    public void TriggerHit()    => GetComponent<PlayerAnimatorController>()?.TriggerHit();
+    public void TriggerDeath()  => GetComponent<PlayerAnimatorController>()?.TriggerDeath();
+    public void TriggerFire()   => GetComponent<PlayerAnimatorController>()?.TriggerFire();
+    public void TriggerReload() => GetComponent<PlayerAnimatorController>()?.TriggerReload();
+    public void SetWeaponType(int type) => GetComponent<PlayerAnimatorController>()?.SetWeaponType(type);
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\InputProvider.cs ==========
+using Fusion;
+using Fusion.Sockets;
+using UnityEngine;
+
+public class InputProvider : MonoBehaviour, INetworkRunnerCallbacks
+{
+    private bool      _crouching;
+    private FPSCamera _fpsCamera;
+
+    private bool _crouchPressed;
+    private bool _reloadPressed;
+    private bool _switchToRiflePressed;
+    private bool _switchToPistolPressed;
+
+    public void SetCamera(FPSCamera cam) => _fpsCamera = cam;
+
+    void Update()
+    {
+        _crouchPressed         = Input.GetKeyDown(KeyCode.LeftControl);
+        _reloadPressed         = Input.GetKeyDown(KeyCode.R);
+        _switchToRiflePressed  = Input.GetKeyDown(KeyCode.Alpha1);
+        _switchToPistolPressed = Input.GetKeyDown(KeyCode.Alpha2);
+    }
+
+    public void OnInput(NetworkRunner runner, NetworkInput input)
+    {
+        var data = new NetworkInputData();
+
+        // Äá»c input trá»±c tiáº¿p
+        data.MoveDirection = new Vector2(
+            Input.GetAxisRaw("Horizontal"),
+            Input.GetAxisRaw("Vertical")
+        );
+
+        data.Yaw = _fpsCamera != null ? _fpsCamera.Yaw : 0f;
+
+        if (_crouchPressed)
+            _crouching = !_crouching;
+
+        data.Crouch        = _crouching;
+        data.Sprint        = Input.GetKey(KeyCode.LeftShift);
+        data.Fire          = Input.GetMouseButton(0);
+        data.Reload        = _reloadPressed;
+        data.SwitchToRifle  = _switchToRiflePressed;
+        data.SwitchToPistol = _switchToPistolPressed;
+
+        input.Set(data);
+
+        _crouchPressed        = false;
+        _reloadPressed        = false;
+        _switchToRiflePressed = false;
+        _switchToPistolPressed = false;
+
+        Debug.Log($"Client gá»­i input: {data.MoveDirection}");
+    }
+
+    // CÃ¡c callback khÃ¡c giá»¯ nguyÃªn
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+    public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
+    public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason) { }
+    public void OnConnectedToServer(NetworkRunner runner) { }
+    public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason) { }
+    public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+    public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason) { }
+    public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
+    public void OnSessionListUpdated(NetworkRunner runner, System.Collections.Generic.List<SessionInfo> sessionList) { }
+    public void OnCustomAuthenticationResponse(NetworkRunner runner, System.Collections.Generic.Dictionary<string, object> data) { }
+    public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
+    public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, System.ArraySegment<byte> data) { }
+    public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
+    public void OnSceneLoadDone(NetworkRunner runner) { }
+    public void OnSceneLoadStart(NetworkRunner runner) { }
+    public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\PlayerAnimatorController.cs ==========
+using UnityEngine;
+
+public class PlayerAnimatorController : MonoBehaviour
+{
+    private Animator _animator;
+    private FPSController _fpsController;
+    private bool _ready;
+
+    void Start()
+    {
+        _animator = GetComponentInChildren<Animator>();
+        _fpsController = GetComponent<FPSController>();
+    }
+
+    void Update()
+    {
+        if (!_ready)
+        {
+            if (_fpsController == null || !_fpsController.Object.IsValid) return;
+            _ready = true;
+        }
+
+        if (_animator == null) return;
+
+        float forward = Mathf.Abs(_fpsController.LastForward) < 0.001f ? 0f : _fpsController.LastForward;
+        float strafe = Mathf.Abs(_fpsController.LastStrafe) < 0.001f ? 0f : _fpsController.LastStrafe;
+
+        _animator.SetFloat("Forward", forward, 0.1f, Time.deltaTime);
+        _animator.SetFloat("Strafe", strafe, 0.1f, Time.deltaTime);
+        _animator.SetBool("Crouch", _fpsController.IsCrouching);
+    }
+
+    public void TriggerHit() => _animator?.SetTrigger("Hit");
+    public void TriggerDeath() => _animator?.SetTrigger("Death");
+    public void TriggerFire() => _animator?.SetTrigger("Fire");
+    public void TriggerReload() => _animator?.SetTrigger("Reload");
+    public void SetWeaponType(int type) => _animator?.SetInteger("WeaponType", type);
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\PlayerDebugLogger.cs ==========
+using Fusion;
+using UnityEngine;
+using System.Collections.Generic;
+
+public class PlayerDebugLogger : MonoBehaviour
+{
+    private static PlayerDebugLogger _instance;
+    private static List<FPSController> _players = new();
+    private float _timer;
+
+    void Awake()
+    {
+        if (_instance != null) { Destroy(gameObject); return; }
+        _instance = this;
+    }
+
+    public static void Register(FPSController controller)
+    {
+        if (!_players.Contains(controller))
+            _players.Add(controller);
+    }
+
+    public static void Unregister(FPSController controller)
+    {
+        _players.Remove(controller);
+    }
+
+    void Update()
+    {
+        _timer += Time.deltaTime;
+        if (_timer < 1f) return;
+        _timer = 0f;
+
+        foreach (var p in _players)
+        {
+            if (p == null) continue;
+            Debug.Log($"[ALL_POS] Owner={p.Object.InputAuthority} InputAuth={p.Object.HasInputAuthority} StateAuth={p.Object.HasStateAuthority} | pos={p.transform.position}");
+        }
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\PlayerHealth.cs ==========
+using System;
+using Fusion;
+using UnityEngine;
+
+public class PlayerHealth : NetworkBehaviour
+{
+    [Networked] public int Health { get; set; }
+
+    [Header("Settings")]
+    [SerializeField] private int   maxHealth    = 100;
+    [SerializeField] private float respawnDelay = 3f;
+
+    public static event Action<PlayerHealth> OnHealthChanged;
+    public static event Action<PlayerHealth> OnPlayerDied;
+
+    private bool _isDead = false;
+
+    public override void Spawned()
+    {
+        if (Object.HasStateAuthority)
+            Health = maxHealth;
+    }
+
+    public void TakeDamage(int damage, PlayerRef killerRef = default)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (_isDead) return;
+
+        Health = Mathf.Max(0, Health - damage);
+        RPC_NotifyHealthChanged();
+
+        if (Health <= 0)
+            StartDeath(killerRef);
+    }
+
+    void StartDeath(PlayerRef killerRef)
+    {
+        _isDead = true;
+
+        // TÃ¬m team cá»§a killer Ä‘á»ƒ register kill
+        if (GameManager.instance != null && killerRef != default)
+        {
+            int killerTeam = GetKillerTeam(killerRef);
+            GameManager.instance.RegisterKill(killerTeam);
+        }
+
+        RPC_OnDied();
+        StartCoroutine(RespawnAfterDelay());
+    }
+
+    int GetKillerTeam(PlayerRef killerRef)
+    {
+        if (RoomPlayerData.instance == null) return 0;
+        foreach (var slot in RoomPlayerData.instance.GetOccupied())
+            if (slot.PlayerRef == killerRef)
+                return slot.Team;
+        return 0;
+    }
+
+    System.Collections.IEnumerator RespawnAfterDelay()
+    {
+        yield return new WaitForSeconds(respawnDelay);
+        if (!Object.HasStateAuthority) yield break;
+
+        Health  = maxHealth;
+        _isDead = false;
+
+        var spawner = FindFirstObjectByType<PlayerSpawner>();
+        if (spawner != null)
+        {
+            var np   = GetComponent<NetworkPlayer>();
+            int team = np != null ? np.Team : 0;
+            Vector3 spawnPos = spawner.GetPublicSpawnPoint(team);
+
+            var fps = GetComponent<FPSController>();
+            fps?.InitSpawnPosition(spawnPos);
+        }
+
+        RPC_NotifyHealthChanged();
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_NotifyHealthChanged() => OnHealthChanged?.Invoke(this);
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_OnDied()
+    {
+        OnPlayerDied?.Invoke(this);
+        Debug.Log($"[PlayerHealth] {gameObject.name} died");
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\PlayerNameplate.cs ==========
+using Fusion;
+using TMPro;
+using UnityEngine;
+
+public class PlayerNameplate : NetworkBehaviour
+{
+    [SerializeField] private GameObject nameplateRoot;
+    [SerializeField] private TextMeshPro nameText;
+    [SerializeField] private Color teammateColor = Color.white;
+    [SerializeField] private Color enemyColor = Color.red;
+
+    private Transform _cameraTransform;
+    private Transform _headBone;
+
+    public override void Spawned()
+    {
+        if (Object.HasInputAuthority)
+        {
+            nameplateRoot.SetActive(false);
+            return;
+        }
+
+        _cameraTransform = Camera.main?.transform;
+
+        // Lấy head bone để follow
+        var animator = GetComponentInChildren<Animator>();
+        if (animator != null)
+            _headBone = animator.GetBoneTransform(HumanBodyBones.Head);
+
+        nameplateRoot.SetActive(true);
+    }
+
+    public override void Render()
+    {
+        if (Object.HasInputAuthority || !nameplateRoot.activeSelf) return;
+
+        // Follow head bone
+        if (_headBone != null)
+            nameplateRoot.transform.position = _headBone.position + Vector3.up * 0.3f;
+
+        // Billboard
+        if (_cameraTransform != null)
+            nameplateRoot.transform.LookAt(
+                nameplateRoot.transform.position + _cameraTransform.rotation * Vector3.forward,
+                _cameraTransform.rotation * Vector3.up
+            );
+
+        // Update mỗi frame vì NickName và Team có thể sync trễ
+        UpdateNameplate();
+    }
+
+    void UpdateNameplate()
+    {
+        var networkPlayer = GetComponent<NetworkPlayer>();
+        if (networkPlayer == null) return;
+
+        nameText.text = networkPlayer.NickName.ToString();
+
+        foreach (var player in Runner.ActivePlayers)
+        {
+            if (!Runner.TryGetPlayerObject(player, out NetworkObject localObj)) continue;
+            if (!localObj.HasInputAuthority) continue;
+
+            var localNetPlayer = localObj.GetComponent<NetworkPlayer>();
+            if (localNetPlayer == null) break;
+
+            nameText.color = localNetPlayer.Team == networkPlayer.Team
+                ? teammateColor
+                : enemyColor;
+            break;
+        }
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\PlayerSpawner.cs ==========
+using System.Collections.Generic;
+using Fusion;
+using UnityEngine;
+
+public class PlayerSpawner : NetworkBehaviour
+{
+    public static PlayerSpawner Instance { get; private set; }
+
+    [SerializeField] private NetworkObject playerPrefab;
+
+    private readonly Dictionary<PlayerRef, NetworkObject> _spawnedPlayers = new();
+    private int _teamACount;
+    private int _teamBCount;
+    private GameObject[] _spawnPointsA;
+    private GameObject[] _spawnPointsB;
+
+    public override void Spawned()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Debug.LogWarning("[PlayerSpawner] Another PlayerSpawner instance already exists.");
+        }
+
+        Instance = this;
+
+        _spawnPointsA = GameObject.FindGameObjectsWithTag("SpawnPointA");
+        _spawnPointsB = GameObject.FindGameObjectsWithTag("SpawnPointB");
+
+        Debug.Log($"[PlayerSpawner] Spawned. Prefab={(playerPrefab != null ? playerPrefab.name : "null")} " +
+                  $"SpawnPointA: {_spawnPointsA?.Length ?? 0}, SpawnPointB: {_spawnPointsB?.Length ?? 0}");
+
+        if (Object.HasStateAuthority && playerPrefab == null)
+        {
+            Debug.LogError("[PlayerSpawner] playerPrefab is not assigned in the inspector.");
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+    }
+
+    public bool IsPlayerSpawned(PlayerRef player)
+    {
+        return player != PlayerRef.None &&
+               _spawnedPlayers.TryGetValue(player, out var obj) &&
+               obj != null;
+    }
+
+    public void SpawnPlayer(PlayerRef player)
+    {
+        if (!Object.HasStateAuthority)
+        {
+            Debug.Log("[PlayerSpawner] Skip SpawnPlayer because not StateAuthority.");
+            return;
+        }
+
+        if (player == PlayerRef.None)
+        {
+            Debug.LogError("[PlayerSpawner] SpawnPlayer called with invalid PlayerRef None.");
+            return;
+        }
+
+        if (playerPrefab == null)
+        {
+            Debug.LogError("[PlayerSpawner] Cannot spawn player because playerPrefab is missing.");
+            return;
+        }
+
+        if (IsPlayerSpawned(player))
+        {
+            Debug.Log($"[PlayerSpawner] Player {player} already spawned, skipping.");
+            return;
+        }
+
+        EnsureSpawnPoints();
+
+        int team = GetTeamForPlayer(player);
+        if (team == 0) _teamACount++;
+        else _teamBCount++;
+
+        Vector3 spawnPos = GetPublicSpawnPoint(team);
+
+        NetworkObject playerObj = Runner.Spawn(
+            playerPrefab,
+            spawnPos,
+            Quaternion.identity,
+            player,
+            (runner, obj) =>
+            {
+                obj.transform.position = spawnPos;
+
+                var fps = obj.GetComponent<FPSController>();
+                fps?.InitSpawnPosition(spawnPos);
+
+                var np = obj.GetComponent<NetworkPlayer>();
+                if (np != null) np.Team = team;
+            }
+        );
+
+        if (playerObj == null)
+        {
+            Debug.LogError($"[PlayerSpawner] Spawn returned null for player {player}!");
+            if (team == 0) _teamACount = Mathf.Max(0, _teamACount - 1);
+            else _teamBCount = Mathf.Max(0, _teamBCount - 1);
+            return;
+        }
+
+        _spawnedPlayers[player] = playerObj;
+        Debug.Log($"[PlayerSpawner] Spawned player {player} team {team} InputAuth={playerObj.HasInputAuthority} StateAuth={playerObj.HasStateAuthority}");
+    }
+
+    public void DespawnPlayer(PlayerRef player)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (_spawnedPlayers.TryGetValue(player, out var obj))
+        {
+            if (obj != null) Runner.Despawn(obj);
+            _spawnedPlayers.Remove(player);
+            Debug.Log($"[PlayerSpawner] Despawned player {player}");
+        }
+    }
+
+    private void EnsureSpawnPoints()
+    {
+        if (_spawnPointsA == null || _spawnPointsB == null)
+        {
+            _spawnPointsA = GameObject.FindGameObjectsWithTag("SpawnPointA");
+            _spawnPointsB = GameObject.FindGameObjectsWithTag("SpawnPointB");
+        }
+    }
+
+    private int GetTeamForPlayer(PlayerRef player)
+    {
+        if (RoomPlayerData.instance != null)
+        {
+            var slots = RoomPlayerData.instance.GetOccupied();
+            foreach (var slot in slots)
+                if (slot.PlayerRef == player)
+                    return slot.Team;
+        }
+
+        return _teamACount <= _teamBCount ? 0 : 1;
+    }
+
+    public Vector3 GetPublicSpawnPoint(int team)
+    {
+        GameObject[] points = team == 0 ? _spawnPointsA : _spawnPointsB;
+        if (points == null || points.Length == 0)
+            return new Vector3(team == 0 ? -10f : 10f, 1f, Random.Range(-5f, 5f));
+
+        var shuffled = new List<GameObject>(points);
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+
+        float checkRadius = 1.2f;
+        foreach (var point in shuffled)
+        {
+            Vector3 pos = point.transform.position;
+            bool occupied = false;
+            foreach (var spawned in _spawnedPlayers.Values)
+            {
+                if (spawned == null) continue;
+                if (Vector3.Distance(spawned.transform.position, pos) < checkRadius)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (!occupied) return pos;
+        }
+
+        return shuffled[Random.Range(0, shuffled.Count)].transform.position;
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\SafeZoneDectector.cs ==========
+using UnityEngine;
+
+// Gáº¯n vÃ o SafeZone_Visual (tháº£m) â€” cáº§n IsTrigger = true trÃªn MeshCollider
+public class SafeZoneDetector : MonoBehaviour
+{
+    [Header("Team cá»§a safe zone nÃ y")]
+    [SerializeField] private int teamID; // 0 = TeamA, 1 = TeamB
+
+    void OnTriggerExit(Collider other)
+    {
+        var fp = other.GetComponentInParent<FPSController>();
+        if (fp == null || !fp.Object.HasInputAuthority) return;
+
+        // Chá»‰ xá»­ lÃ½ player cÃ¹ng team vá»›i safe zone nÃ y
+        var np = other.GetComponentInParent<NetworkPlayer>();
+        if (np == null || np.Team != teamID) return;
+
+        Debug.Log($"[SafeZone] Team {teamID} player left safe zone");
+
+        // BÃ¡o SafeZoneManager player Ä‘Ã£ ra
+        SafeZoneManager.instance?.OnPlayerLeftSafeZone(teamID);
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        var fp = other.GetComponentInParent<FPSController>();
+        if (fp == null || !fp.Object.HasInputAuthority) return;
+
+        var np = other.GetComponentInParent<NetworkPlayer>();
+        if (np == null || np.Team != teamID) return;
+
+        // BÃ¡o Ä‘ang trong safe zone Ä‘á»ƒ lock fire
+        SafeZoneManager.instance?.SetLocalPlayerInSafeZone(true);
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        var fp = other.GetComponentInParent<FPSController>();
+        if (fp == null || !fp.Object.HasInputAuthority) return;
+
+        var np = other.GetComponentInParent<NetworkPlayer>();
+        if (np == null || np.Team != teamID) return;
+
+        SafeZoneManager.instance?.SetLocalPlayerInSafeZone(true);
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\SpawnCallbackHandler.cs ==========
+using Fusion;
+using Fusion.Sockets;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class SpawnCallbackHandler : MonoBehaviour, INetworkRunnerCallbacks
+{
+    private PlayerSpawner _spawner;
+    private NetworkRunner _runner;
+    private bool _sceneLoaded = false;
+
+    void Awake()
+    {
+        _spawner = PlayerSpawner.Instance ?? GetComponent<PlayerSpawner>();
+    }
+
+    void Start()
+    {
+        _runner = FindFirstObjectByType<NetworkRunner>();
+        if (_runner != null)
+            _runner.AddCallbacks(this);
+        else
+            Debug.LogError("SpawnCallbackHandler: No NetworkRunner found!");
+    }
+
+    public void OnSceneLoadDone(NetworkRunner runner)
+    {
+        if (!runner.IsServer) return;
+        _sceneLoaded = true;
+
+        _spawner ??= PlayerSpawner.Instance ?? FindObjectOfType<PlayerSpawner>();
+        if (_spawner == null)
+        {
+            Debug.LogError("[SpawnCallbackHandler] PlayerSpawner missing in scene.");
+            return;
+        }
+
+        Debug.Log("[SpawnCallbackHandler] Scene loaded, spawning all players...");
+
+        foreach (var player in runner.ActivePlayers)
+        {
+            if (!_spawner.IsPlayerSpawned(player))
+                _spawner.SpawnPlayer(player);
+        }
+    }
+
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
+    {
+        if (!runner.IsServer) return;
+
+        if (!_sceneLoaded) return;
+
+        _spawner ??= PlayerSpawner.Instance ?? FindObjectOfType<PlayerSpawner>();
+        if (_spawner == null)
+        {
+            Debug.LogError("[SpawnCallbackHandler] PlayerSpawner missing in scene.");
+            return;
+        }
+
+        if (_spawner.IsPlayerSpawned(player)) return;
+
+        Debug.Log("[SpawnCallbackHandler] Late join: " + player);
+        _spawner.SpawnPlayer(player);
+    }
+
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+        if (!runner.IsServer) return;
+        _spawner ??= PlayerSpawner.Instance ?? FindObjectOfType<PlayerSpawner>();
+        _spawner?.DespawnPlayer(player);
+    }
+
+    public void OnInput(NetworkRunner runner, NetworkInput input) { }
+    public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
+    public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason) { }
+    public void OnConnectedToServer(NetworkRunner runner) { }
+    public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason) { }
+    public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+    public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason) { }
+    public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
+    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList) { }
+    public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
+    public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
+    public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
+    public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
+    public void OnSceneLoadStart(NetworkRunner runner) { _sceneLoaded = false; }
+    public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\Weapons\WeaponController.cs ==========
+using UnityEngine;
+using Fusion;
+using RiotStrike.Data;
+
+public class WeaponController : NetworkBehaviour
+{
+    [Header("Weapon Data")]
+    [SerializeField] private WeaponData ak47Data;
+    [SerializeField] private WeaponData m4a1Data;
+    [SerializeField] private WeaponData pistolData;
+
+    [Header("Fire Points")]
+    [SerializeField] private Transform ak47FirePoint;
+    [SerializeField] private Transform m4a1FirePoint;
+    [SerializeField] private Transform pistolFirePoint;
+
+    [Header("Weapon Models")]
+    [SerializeField] private GameObject ak47Model;
+    [SerializeField] private GameObject m4a1Model;
+    [SerializeField] private GameObject pistolModel;
+
+    [Header("References")]
+    [SerializeField] private GameObject muzzleFlashVFX;
+    [SerializeField] private Camera     fpsCamera;
+
+    [Header("Raycast Settings")]
+    [SerializeField] private LayerMask shootableMask; // thÃªm mask Ä‘á»ƒ kiá»ƒm soÃ¡t raycast
+
+    [Networked] public int        CurrentAmmo     { get; set; }
+    [Networked] public int        ReserveAmmo     { get; set; }
+    [Networked] public bool       IsRifleUnlocked { get; set; }
+    [Networked] private TickTimer _reloadTimer    { get; set; }
+    [Networked] private TickTimer _fireTimer      { get; set; }
+    [Networked] private int       _currentSlot    { get; set; }
+    [Networked] public int        TeamID          { get; set; }
+
+    private WeaponData    _currentWeapon;
+    private Transform     _currentFirePoint;
+    private FPSController _fpsController;
+    private bool          _equipped   = false;
+    private int           _lastTeamID = -1;
+    private bool          _lastRifleUnlocked = false;
+
+    public override void Spawned()
+    {
+        _fpsController = GetComponent<FPSController>();
+        HideAllModels();
+        _fpsController?.SetWeaponType(1);
+
+        if (Object.HasStateAuthority)
+        {
+            var np = GetComponent<NetworkPlayer>();
+            TeamID = np != null ? np.Team : 0;
+            IsRifleUnlocked = false;
+        }
+    }
+
+    public override void Render()
+    {
+        if (!Object.HasInputAuthority) return;
+
+        if (!_equipped && TeamID != _lastTeamID)
+        {
+            _lastTeamID = TeamID;
+            _equipped   = true;
+            EquipPistol();
+        }
+
+        if (IsRifleUnlocked && !_lastRifleUnlocked)
+        {
+            _lastRifleUnlocked = true;
+            EquipRifle();
+            Debug.Log("[WeaponController] Auto switched to Rifle!");
+        }
+    }
+
+    public void EquipPistol()
+    {
+        _currentWeapon    = pistolData;
+        _currentFirePoint = pistolFirePoint;
+        _currentSlot      = 0;
+
+        if (Object.HasStateAuthority)
+        {
+            CurrentAmmo = pistolData != null ? pistolData.magazineSize : 12;
+            ReserveAmmo = pistolData != null ? pistolData.reserveAmmo  : 36;
+        }
+
+        HideAllModels();
+        if (pistolModel) pistolModel.SetActive(true);
+        _fpsController?.SetWeaponType(1);
+    }
+
+    public void EquipRifle()
+    {
+        if (!IsRifleUnlocked) return;
+
+        bool isAK         = TeamID == 0;
+        _currentWeapon    = isAK ? ak47Data     : m4a1Data;
+        _currentFirePoint = isAK ? ak47FirePoint : m4a1FirePoint;
+        _currentSlot      = 1;
+
+        if (Object.HasStateAuthority)
+        {
+            CurrentAmmo = _currentWeapon != null ? _currentWeapon.magazineSize : 30;
+            ReserveAmmo = _currentWeapon != null ? _currentWeapon.reserveAmmo  : 90;
+        }
+
+        HideAllModels();
+        if (isAK) { if (ak47Model) ak47Model.SetActive(true); }
+        else      { if (m4a1Model) m4a1Model.SetActive(true); }
+        _fpsController?.SetWeaponType(0);
+    }
+
+    void HideAllModels()
+    {
+        if (ak47Model)   ak47Model.SetActive(false);
+        if (m4a1Model)   m4a1Model.SetActive(false);
+        if (pistolModel) pistolModel.SetActive(false);
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        if (!Object.HasInputAuthority) return;
+        if (!GetInput(out NetworkInputData input)) return;
+        if (_currentWeapon == null) return;
+
+        if (input.SwitchToRifle && IsRifleUnlocked && _currentSlot != 1)
+            EquipRifle();
+        if (input.SwitchToPistol && _currentSlot != 0)
+            EquipPistol();
+
+        if (_reloadTimer.Expired(Runner))
+        {
+            _reloadTimer = default;
+            int needed  = _currentWeapon.magazineSize - CurrentAmmo;
+            int take    = Mathf.Min(needed, ReserveAmmo);
+            CurrentAmmo += take;
+            ReserveAmmo -= take;
+        }
+
+        bool isReloading = !_reloadTimer.ExpiredOrNotRunning(Runner);
+
+        bool canFire = SafeZoneManager.instance == null || SafeZoneManager.instance.CanFire();
+
+        if (canFire && input.Fire && _fireTimer.ExpiredOrNotRunning(Runner)
+            && !isReloading && CurrentAmmo > 0)
+        {
+            Fire();
+            _fireTimer = TickTimer.CreateFromSeconds(Runner, 1f / _currentWeapon.fireRate);
+        }
+
+        if (input.Reload && _reloadTimer.ExpiredOrNotRunning(Runner)
+            && CurrentAmmo < _currentWeapon.magazineSize && ReserveAmmo > 0)
+        {
+            _reloadTimer = TickTimer.CreateFromSeconds(Runner, _currentWeapon.reloadTime);
+            _fpsController?.TriggerReload();
+        }
+    }
+
+    void Fire()
+    {
+        CurrentAmmo--;
+        _fpsController?.TriggerFire();
+
+        if (muzzleFlashVFX != null && _currentFirePoint != null)
+        {
+            muzzleFlashVFX.transform.SetPositionAndRotation(
+                _currentFirePoint.position, _currentFirePoint.rotation);
+            muzzleFlashVFX.SetActive(true);
+            Invoke(nameof(HideMuzzleFlash), 0.05f);
+        }
+
+        if (!Runner.IsForward) return;
+
+        Camera cam = fpsCamera != null ? fpsCamera : Camera.main;
+        if (cam == null) return;
+
+        var ray = cam.ScreenPointToRay(new Vector3(Screen.width / 2f, Screen.height / 2f));
+        if (Physics.Raycast(ray, out RaycastHit hit, _currentWeapon.range, shootableMask))
+        {
+            Debug.DrawLine(ray.origin, hit.point, Color.red, 1f);
+            Debug.Log($"Raycast hit {hit.collider.name} on layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+
+            var health = hit.collider.GetComponentInParent<PlayerHealth>();
+            if (health != null)
+            {
+                bool isHeadshot = hit.collider.CompareTag("Head");
+                int dmg = isHeadshot
+                    ? _currentWeapon.damage * _currentWeapon.headshotMultiplier
+                    : _currentWeapon.damage;
+
+                RPC_ApplyDamage(health.Object, dmg, Runner.LocalPlayer);
+            }
+        }
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    void RPC_ApplyDamage(NetworkObject target, int damage, PlayerRef killerRef)
+    {
+        var health = target.GetComponent<PlayerHealth>();
+        if (health == null) return;
+        health.TakeDamage(damage, killerRef);
+        target.GetComponent<FPSController>()?.TriggerHit();
+    }
+
+    void HideMuzzleFlash() => muzzleFlashVFX?.SetActive(false);
+
+    public void OnRifleUnlocked()
+    {
+        if (Object.HasStateAuthority)
+            IsRifleUnlocked = true;
+        Debug.Log("[WeaponController] Rifle unlocked!");
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Gameplay\Weapons\WeaponData.cs ==========
+using UnityEngine;
+
+namespace RiotStrike.Data
+{
+    public enum WeaponType
+    {
+        Pistol,
+        Rifle
+    }
+    [CreateAssetMenu(fileName = "WeaponData", menuName = "RiotStrike/WeaponData")]
+    public class WeaponData : ScriptableObject
+    {
+        public string weaponName;
+        public int damage;
+        public float fireRate;            // phÃ¡t/giÃ¢y
+        public int magazineSize;
+        public int reserveAmmo;
+        public float reloadTime;
+        public float range;               // táº§m raycast tá»‘i Ä‘a
+        public int headshotMultiplier;    // há»‡ sá»‘ nhÃ¢n khi headshot
+        public WeaponType weaponType;     // Rifle hoáº·c Pistol
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\GameManager.cs ==========
+using System.Collections.Generic;
+using Fusion;
+using TMPro;
+using UnityEngine;
+
+public class GameManager : NetworkBehaviour
+{
+    public static GameManager instance;
+
+    [Header("References")]
+    [SerializeField] private TimerManager timerManager;
+
+    [Header("Score UI")]
+    [SerializeField] private TextMeshProUGUI teamAScoreText;
+    [SerializeField] private TextMeshProUGUI teamBScoreText;
+    [SerializeField] private GameObject      endGamePanel;
+    [SerializeField] private TextMeshProUGUI endGameText;
+
+    [Networked] public int  TeamAScore  { get; set; }
+    [Networked] public int  TeamBScore  { get; set; }
+    [Networked] public bool GameStarted { get; set; }
+    [Networked] public bool GameEnded   { get; set; }
+
+    private ChangeDetector _changeDetector;
+
+    public override void Spawned()
+    {
+        instance = this;
+        _changeDetector = GetChangeDetector(ChangeDetector.Source.SimulationState);
+
+        if (endGamePanel != null)
+            endGamePanel.SetActive(false);
+
+        if (!Object.HasStateAuthority) return;
+
+        // Äá»c config tá»« RoomPlayerData
+        if (RoomPlayerData.instance != null)
+        {
+            int pistolTime = RoomPlayerData.instance.PistolTime;
+            int rifleTime  = RoomPlayerData.instance.RifleTime;
+            int roundTime  = pistolTime + rifleTime;
+
+            if (timerManager != null)
+                timerManager.SetTimings(roundTime, pistolTime);
+
+            Debug.Log($"[GameManager] Round={roundTime}s Pistol={pistolTime}s Rifle={rifleTime}s");
+        }
+        else
+        {
+            Debug.LogWarning("[GameManager] RoomPlayerData not found, using TimerManager defaults.");
+        }
+
+        TeamAScore  = 0;
+        TeamBScore  = 0;
+        GameStarted = true;
+        GameEnded   = false;
+    }
+
+    public override void Render()
+    {
+        foreach (var change in _changeDetector.DetectChanges(this))
+        {
+            switch (change)
+            {
+                case nameof(TeamAScore):
+                case nameof(TeamBScore):
+                    UpdateScoreUI();
+                    break;
+                case nameof(GameEnded):
+                    if (GameEnded) ShowEndGame();
+                    break;
+            }
+        }
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        if (!Object.HasStateAuthority) return;
+        if (!GameStarted || GameEnded) return;
+
+        // Kiá»ƒm tra háº¿t giá»
+        if (timerManager != null && timerManager.IsTimeUp())
+            EndGame();
+    }
+
+    // Gá»i tá»« PlayerHealth khi cÃ³ kill
+    public void RegisterKill(int killerTeam)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (GameEnded) return;
+
+        if (killerTeam == 0) TeamAScore++;
+        else                 TeamBScore++;
+
+        Debug.Log($"[GameManager] Kill registered. TeamA={TeamAScore} TeamB={TeamBScore}");
+    }
+
+    void EndGame()
+    {
+        GameEnded = true;
+        RPC_NotifyGameEnd(TeamAScore, TeamBScore);
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_NotifyGameEnd(int scoreA, int scoreB)
+    {
+        ShowEndGameResult(scoreA, scoreB);
+    }
+
+    void ShowEndGame()
+    {
+        ShowEndGameResult(TeamAScore, TeamBScore);
+    }
+
+    void ShowEndGameResult(int scoreA, int scoreB)
+    {
+        if (endGamePanel != null)
+            endGamePanel.SetActive(true);
+
+        if (endGameText != null)
+        {
+            if (scoreA > scoreB)
+                endGameText.text = $"TEAM A THáº®NG!\n{scoreA} - {scoreB}";
+            else if (scoreB > scoreA)
+                endGameText.text = $"TEAM B THáº®NG!\n{scoreA} - {scoreB}";
+            else
+                endGameText.text = $"HÃ’A!\n{scoreA} - {scoreB}";
+        }
+
+        Debug.Log($"[GameManager] Game ended. A={scoreA} B={scoreB}");
+    }
+
+    void UpdateScoreUI()
+    {
+        if (teamAScoreText != null) teamAScoreText.text = TeamAScore.ToString();
+        if (teamBScoreText != null) teamBScoreText.text = TeamBScore.ToString();
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\HostConfigManager.cs ==========
+using Fusion;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class HostConfigManager : MonoBehaviour
+{
+    [Header("Sliders")]
+    public Slider waitTimeSlider;
+    public Slider pistolTimeSlider;
+    public Slider rifleTimeSlider;
+
+    [Header("Display Text")]
+    public TextMeshProUGUI waitTimeText;
+    public TextMeshProUGUI pistolTimeText;
+    public TextMeshProUGUI rifleTimeText;
+    public TextMeshProUGUI roundTimeText;
+    public GameObject      warningText;  // hiá»‡n khi RoundTime = 0
+
+    public int WaitTime   { get; private set; } = 30;
+    public int PistolTime { get; private set; } = 60;
+    public int RifleTime  { get; private set; } = 120;
+    public int RoundTime  => PistolTime + RifleTime;
+
+    void Start()
+    {
+        // Min = 0 Ä‘á»ƒ tá»± do, max theo thiáº¿t káº¿
+        waitTimeSlider.minValue   = 10;  waitTimeSlider.maxValue   = 60;
+        pistolTimeSlider.minValue = 0;   pistolTimeSlider.maxValue = 180;
+        rifleTimeSlider.minValue  = 0;   rifleTimeSlider.maxValue  = 420;
+
+        waitTimeSlider.wholeNumbers   = true;
+        pistolTimeSlider.wholeNumbers = true;
+        rifleTimeSlider.wholeNumbers  = true;
+
+        // Default
+        waitTimeSlider.value   = 30;
+        pistolTimeSlider.value = 60;
+        rifleTimeSlider.value  = 120;
+
+        waitTimeSlider.onValueChanged.AddListener(_   => UpdateConfig());
+        pistolTimeSlider.onValueChanged.AddListener(_ => UpdateConfig());
+        rifleTimeSlider.onValueChanged.AddListener(_  => UpdateConfig());
+
+        UpdateConfig();
+    }
+
+    public void UpdateConfig()
+    {
+        WaitTime   = Mathf.RoundToInt(waitTimeSlider.value);
+        PistolTime = Mathf.RoundToInt(pistolTimeSlider.value);
+        RifleTime  = Mathf.RoundToInt(rifleTimeSlider.value);
+
+        waitTimeText.text   = FormatTime(WaitTime);
+        pistolTimeText.text = FormatTime(PistolTime);
+        rifleTimeText.text  = FormatTime(RifleTime);
+        roundTimeText.text  = FormatTime(RoundTime);
+
+        // Warning khi cáº£ 2 Ä‘á»u = 0 â†’ tráº­n khÃ´ng cÃ³ thá»i gian
+        if (warningText != null)
+            warningText.SetActive(RoundTime == 0);
+
+        // Sync lÃªn network náº¿u lÃ  host
+        if (RoomPlayerData.instance != null &&
+            RoomPlayerData.instance.Object.HasStateAuthority)
+        {
+            RoomPlayerData.instance.RPC_UpdateRoomConfig(WaitTime, PistolTime, RifleTime);
+        }
+    }
+
+    string FormatTime(int seconds)
+    {
+        int m = seconds / 60;
+        int s = seconds % 60;
+        return $"{m}:{s:00}";
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\LobbyManager.cs ==========
+using System.Collections;
+using System.Collections.Generic;
+using Fusion;
+using Fusion.Sockets;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using System;
+
+public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
+{
+    public static LobbyManager instance;
+
+    [SerializeField] private NetworkObject roomPlayerDataPrefab;
+
+    private NetworkRunner _runner;
+    private InputProvider _inputProvider;
+    private List<SessionInfo> _sessionList = new();
+    private string _localNickName = "";
+
+    // Láº¥y AppSettings tá»« PhotonAppSettings.asset, chá»‰ override Region
+    private static Fusion.Photon.Realtime.FusionAppSettings GetAppSettings()
+    {
+        var settings = Fusion.Photon.Realtime.PhotonAppSettings.Global.AppSettings.GetCopy();
+        settings.FixedRegion = "asia";
+        return settings;
+    }
+
+    public event Action<List<SessionInfo>> OnRoomListUpdated;
+    public event Action<string> OnJoinFailed;
+    public event Action OnConnected;
+    public event Action OnRoomJoined;
+
+    void Awake()
+    {
+        if (instance != null && instance != this) { Destroy(gameObject); return; }
+        instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+
+    public async void Connect(string nickName)
+    {
+        if (_runner != null) return;
+        _localNickName = nickName;
+
+        _runner = gameObject.AddComponent<NetworkRunner>();
+        _runner.ProvideInput = false;
+        _runner.AddCallbacks(this);
+
+        // FIX: ThÃªm AppSettings vÃ o JoinSessionLobby Ä‘á»ƒ cÃ¹ng region vá»›i StartGame
+        var result = await _runner.JoinSessionLobby(SessionLobby.Shared, customAppSettings: GetAppSettings());
+
+        if (result.Ok)
+        {
+            Debug.Log("Connected to lobby as: " + nickName);
+            OnConnected?.Invoke();
+        }
+        else
+        {
+            Debug.LogError("Failed to connect: " + result.ShutdownReason);
+            OnJoinFailed?.Invoke(result.ShutdownReason.ToString());
+            Destroy(_runner);
+            _runner = null;
+        }
+    }
+
+    public async void CreateRoom(string roomName, int maxPlayers = 8)
+    {
+        if (_runner == null) { OnJoinFailed?.Invoke("ChÆ°a káº¿t ná»‘i."); return; }
+
+        _runner.ProvideInput = true;
+        if (_inputProvider == null)
+        {
+            _inputProvider = gameObject.AddComponent<InputProvider>();
+        }
+
+        var result = await _runner.StartGame(new StartGameArgs
+        {
+            GameMode = GameMode.AutoHostOrClient,
+            SessionName = roomName,
+            PlayerCount = maxPlayers,
+            Scene = SceneRef.FromIndex(SceneUtility.GetBuildIndexByScenePath("Assets/_Project/Scenes/Lobby.unity")),
+            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(),
+            CustomPhotonAppSettings = GetAppSettings()
+        });
+
+        if (result.Ok)
+            OnRoomJoined?.Invoke();
+        else
+        {
+            Debug.LogError("Create room failed: " + result.ShutdownReason);
+            OnJoinFailed?.Invoke(result.ShutdownReason.ToString());
+        }
+    }
+
+    public async void JoinRoom(string roomName, int maxPlayers = 8)
+    {
+        if (_runner == null) { OnJoinFailed?.Invoke("ChÆ°a káº¿t ná»‘i."); return; }
+
+        _runner.ProvideInput = true;
+        if (_inputProvider == null)
+        {
+            _inputProvider = gameObject.AddComponent<InputProvider>();
+        }
+
+        var result = await _runner.StartGame(new StartGameArgs
+        {
+            GameMode = GameMode.AutoHostOrClient,
+            SessionName = roomName,
+            PlayerCount = maxPlayers,
+            Scene = SceneRef.FromIndex(SceneUtility.GetBuildIndexByScenePath("Assets/_Project/Scenes/Lobby.unity")),
+            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(),
+            CustomPhotonAppSettings = GetAppSettings()
+        });
+
+        if (result.Ok)
+            OnRoomJoined?.Invoke();
+        else
+        {
+            Debug.LogError("Join room failed: " + result.ShutdownReason);
+            OnJoinFailed?.Invoke(result.ShutdownReason.ToString());
+        }
+    }
+
+    public void StartGame()
+    {
+        if (_runner == null || !_runner.IsServer) return;
+        _runner.LoadScene(SceneRef.FromIndex(
+            SceneUtility.GetBuildIndexByScenePath("Assets/_Project/Scenes/Game.unity")));
+    }
+
+    public List<SessionInfo> GetRoomList() => _sessionList;
+    public string GetLocalNickName() => _localNickName;
+
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
+    {
+        if (!runner.IsServer) return;
+
+        if (RoomPlayerData.instance == null)
+            runner.Spawn(roomPlayerDataPrefab, Vector3.zero, Quaternion.identity);
+
+        string nick = player == runner.LocalPlayer
+            ? (_localNickName.Length > 0 ? _localNickName : "Player")
+            : "...";
+
+        StartCoroutine(WaitAndAddPlayer(player, nick));
+    }
+
+
+    IEnumerator WaitAndAddPlayer(PlayerRef player, string nick)
+    {
+        while (RoomPlayerData.instance == null) yield return null;
+
+        var occupied = RoomPlayerData.instance.GetOccupied();
+        foreach (var slot in occupied)
+        {
+            if (slot.PlayerRef == player)
+            {
+                Debug.Log($"Player {player} already in slot, skip add.");
+                yield break;
+            }
+        }
+
+        RoomPlayerData.instance.ServerAddPlayer(player, nick);
+    }
+
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+        if (!runner.IsServer) return;
+        if (RoomPlayerData.instance == null)
+        {
+            Debug.LogWarning("OnPlayerLeft: RoomPlayerData.instance is null, skip.");
+            return;
+        }
+        RoomPlayerData.instance.ServerRemovePlayer(player);
+    }
+
+    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
+    {
+        _sessionList = sessionList;
+        OnRoomListUpdated?.Invoke(_sessionList);
+    }
+
+    public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
+    {
+        Debug.Log("Shutdown: " + shutdownReason);
+        if (_runner != null) Destroy(_runner);
+        if (_inputProvider != null) Destroy(_inputProvider);
+        _runner = null;
+        _inputProvider = null;
+        SceneManager.LoadScene("Lobby");
+    }
+
+    public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason)
+    {
+        Debug.Log("Disconnected: " + reason);
+        if (_runner != null) Destroy(_runner);
+        if (_inputProvider != null) Destroy(_inputProvider);
+        _runner = null;
+        _inputProvider = null;
+        SceneManager.LoadScene("Lobby");
+    }
+
+    public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason)
+        => OnJoinFailed?.Invoke(reason.ToString());
+
+    public void OnConnectedToServer(NetworkRunner runner) { }
+    public void OnInput(NetworkRunner runner, NetworkInput input) { _inputProvider?.OnInput(runner, input); }
+    public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
+    public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+    public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
+    public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
+    public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
+    public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
+    public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
+    public void OnSceneLoadDone(NetworkRunner runner) { }
+    public void OnSceneLoadStart(NetworkRunner runner) { }
+    public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\SafeZoneManager.cs ==========
+using System.Collections;
+using Fusion;
+using UnityEngine;
+
+public class SafeZoneManager : NetworkBehaviour
+{
+    public static SafeZoneManager instance;
+
+    [Networked] private float _countdown  { get; set; }
+    [Networked] public  bool  GameStarted { get; set; }
+
+    private GameObject[] _barriersA;
+    private GameObject[] _barriersB;
+
+    private bool _localStarted      = false;
+    private bool _localLeftSafeZone = false;
+    private bool _isInSafeZone      = true;
+    private int  _localTeam         = -1;
+
+    // Layer names
+    const string LAYER_BARRIER_A = "BarrierA";
+    const string LAYER_BARRIER_B = "BarrierB";
+    const string LAYER_TEAM_A    = "TeamA";
+    const string LAYER_TEAM_B    = "TeamB";
+
+    public override void Spawned()
+    {
+        instance = this;
+
+        _barriersA = GameObject.FindGameObjectsWithTag("BarrierA");
+        _barriersB = GameObject.FindGameObjectsWithTag("BarrierB");
+
+        SetBarrierLayers();
+
+        if (Object.HasStateAuthority)
+        {
+            int waitTime = RoomPlayerData.instance != null
+                ? RoomPlayerData.instance.WaitTime : 10;
+            _countdown  = waitTime;
+            GameStarted = false;
+        }
+
+        StartCoroutine(InitLocalPlayer());
+    }
+
+    void SetBarrierLayers()
+    {
+        int layerA = LayerMask.NameToLayer(LAYER_BARRIER_A);
+        int layerB = LayerMask.NameToLayer(LAYER_BARRIER_B);
+
+        Debug.Log($"[SafeZone] BarrierA layer={layerA}, BarrierB layer={layerB}");
+
+        if (layerA == -1 || layerB == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layers chÆ°a Ä‘Æ°á»£c táº¡o hoáº·c tÃªn khÃ´ng khá»›p!");
+            return;
+        }
+
+        foreach (var b in _barriersA)
+            if (b != null) b.layer = layerA;
+        foreach (var b in _barriersB)
+            if (b != null) b.layer = layerB;
+    }
+
+    IEnumerator InitLocalPlayer()
+    {
+        var runner = FindFirstObjectByType<NetworkRunner>();
+        while (runner == null || RoomPlayerData.instance == null)
+        {
+            runner = FindFirstObjectByType<NetworkRunner>();
+            yield return null;
+        }
+
+        // TÃ¬m team local player
+        foreach (var slot in RoomPlayerData.instance.GetOccupied())
+        {
+            if (slot.PlayerRef == runner.LocalPlayer)
+            {
+                _localTeam = slot.Team;
+                break;
+            }
+        }
+
+        // Set player layer
+        yield return new WaitForSeconds(0.5f); // chá» player spawn
+        SetLocalPlayerLayer();
+
+        // Setup camera culling â€” áº©n barrier team mÃ¬nh khá»i camera local
+        SetupCameraCulling();
+    }
+
+    void SetLocalPlayerLayer()
+    {
+        foreach (var fps in FindObjectsByType<FPSController>(FindObjectsSortMode.None))
+        {
+            if (!fps.Object.HasInputAuthority) continue;
+            int layer = _localTeam == 0
+                ? LayerMask.NameToLayer(LAYER_TEAM_A)
+                : LayerMask.NameToLayer(LAYER_TEAM_B);
+
+            Debug.Log($"[SafeZone] Local player team={_localTeam}, layer={layer}");
+
+            if (layer == -1)
+            {
+                Debug.LogError("[SafeZone] Team layer chÆ°a Ä‘Æ°á»£c táº¡o hoáº·c tÃªn khÃ´ng khá»›p!");
+                return;
+            }
+
+            SetLayerRecursive(fps.gameObject, layer);
+            break;
+        }
+    }
+
+    void SetupCameraCulling()
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+
+        string myBarrierLayer = _localTeam == 0 ? LAYER_BARRIER_A : LAYER_BARRIER_B;
+        int layerIndex = LayerMask.NameToLayer(myBarrierLayer);
+
+        if (layerIndex == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layer chÆ°a Ä‘Æ°á»£c táº¡o hoáº·c tÃªn khÃ´ng khá»›p!");
+            return;
+        }
+
+        int myBarrierMask = 1 << layerIndex;
+
+        cam.cullingMask &= ~myBarrierMask;
+
+        Debug.Log($"[SafeZone] Camera culling set, team={_localTeam}, hidden layer={myBarrierLayer}");
+    }
+
+    void ShowMyBarrierOnCamera()
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+
+        string myBarrierLayer = _localTeam == 0 ? LAYER_BARRIER_A : LAYER_BARRIER_B;
+        int layerIndex = LayerMask.NameToLayer(myBarrierLayer);
+
+        if (layerIndex == -1)
+        {
+            Debug.LogError("[SafeZone] Barrier layer chÆ°a Ä‘Æ°á»£c táº¡o hoáº·c tÃªn khÃ´ng khá»›p!");
+            return;
+        }
+
+        int myBarrierMask = 1 << layerIndex;
+        cam.cullingMask |= myBarrierMask;
+
+        Debug.Log($"[SafeZone] Barrier visible again after leaving safe zone");
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        if (!Object.HasStateAuthority) return;
+        if (GameStarted) return;
+
+        _countdown -= Runner.DeltaTime;
+        if (_countdown <= 0f)
+        {
+            _countdown  = 0f;
+            GameStarted = true;
+        }
+    }
+
+    public override void Render()
+    {
+        if (GameStarted && !_localStarted && _localTeam >= 0)
+        {
+            _localStarted = true;
+            Debug.Log("[SafeZone] Game started!");
+        }
+    }
+
+    public void OnPlayerLeftSafeZone(int teamID)
+    {
+        if (_localTeam != teamID) return;
+        if (_localLeftSafeZone) return;
+
+        _localLeftSafeZone = true;
+        _isInSafeZone      = false;
+
+        ShowMyBarrierOnCamera();
+
+        Debug.Log($"[SafeZone] Player left safe zone permanently");
+    }
+
+    public void SetLocalPlayerInSafeZone(bool inZone)
+    {
+        if (_localLeftSafeZone) return;
+        _isInSafeZone = inZone;
+    }
+
+    public bool CanFire()
+    {
+        if (!GameStarted) return false;
+        if (_isInSafeZone) return false;
+        return true;
+    }
+
+    public float GetCountdown() => Mathf.Max(0, _countdown);
+
+    void SetLayerRecursive(GameObject go, int layer)
+    {
+        if (layer == -1)
+        {
+            Debug.LogError("[SafeZone] Layer chÆ°a Ä‘Æ°á»£c táº¡o hoáº·c tÃªn khÃ´ng khá»›p!");
+            return;
+        }
+
+        go.layer = layer;
+        foreach (Transform child in go.transform)
+            SetLayerRecursive(child.gameObject, layer);
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\TimerManager.cs ==========
+using UnityEngine;
+using TMPro;
+using Fusion;
+
+public class TimerManager : NetworkBehaviour
+{
+    [Header("UI Elements")]
+    public TextMeshProUGUI phaseText;
+    public TextMeshProUGUI timerText;
+
+    [Networked] private float _networkTime   { get; set; }
+    [Networked] private bool  _rifleUnlocked { get; set; }
+
+    [Header("Settings â€” set tá»« HostConfigManager")]
+    public float totalTime          = 600f;
+    public float pistolOnlyDuration = 120f;
+
+    private bool _initialized = false;
+
+    public bool IsTimeUp() => _networkTime <= 0f;
+
+    public override void Spawned()
+    {
+        if (Object.HasStateAuthority)
+        {
+            _networkTime   = totalTime;
+            _rifleUnlocked = false;
+        }
+        _initialized = true;
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        if (!Object.HasStateAuthority) return;
+        if (_networkTime <= 0) return;
+
+        _networkTime -= Runner.DeltaTime;
+
+        if (!_rifleUnlocked && _networkTime <= (totalTime - pistolOnlyDuration))
+        {
+            _rifleUnlocked = true;
+            RPC_OnRifleUnlocked();
+        }
+    }
+
+    public override void Render()
+    {
+        if (!_initialized) return;
+        UpdateUI();
+    }
+
+    void UpdateUI()
+    {
+        float t       = Mathf.Max(0, _networkTime);
+        int   minutes = Mathf.FloorToInt(t / 60);
+        int   seconds = Mathf.FloorToInt(t % 60);
+
+        if (timerText) timerText.text = $"{minutes:00}:{seconds:00}";
+
+        if (phaseText)
+        {
+            if (_rifleUnlocked)
+            {
+                phaseText.text  = "RIFLE UNLOCKED";
+                phaseText.color = Color.green;
+                if (timerText) timerText.color = Color.green;
+            }
+            else
+            {
+                phaseText.text  = "PISTOL ONLY";
+                phaseText.color = Color.yellow;
+                if (timerText) timerText.color = Color.yellow;
+            }
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_OnRifleUnlocked()
+    {
+        Debug.Log("Rifles unlocked!");
+        foreach (var wc in FindObjectsByType<WeaponController>(FindObjectsSortMode.None))
+            wc.OnRifleUnlocked();
+    }
+
+    public void SetTimings(float roundTime, float pistolTime)
+    {
+        if (!Object.HasStateAuthority) return;
+        totalTime          = roundTime;
+        pistolOnlyDuration = pistolTime;
+        _networkTime       = roundTime;
+        _rifleUnlocked     = false;
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Managers\UIRoomManager.cs ==========
+using Fusion;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class UIRoomManager : MonoBehaviour
+{
+    [Header("Room Info")]
+    [SerializeField] private TextMeshProUGUI roomNameText;
+    [SerializeField] private TextMeshProUGUI roomStatusText;
+
+    [Header("Team A - kÃ©o Content vÃ o")]
+    [SerializeField] private Transform teamAPlayerList;
+    [SerializeField] private Button    joinTeamAButton;
+
+    [Header("Team B - kÃ©o Content vÃ o")]
+    [SerializeField] private Transform teamBPlayerList;
+    [SerializeField] private Button    joinTeamBButton;
+
+    [Header("Player Item Prefab")]
+    [SerializeField] private GameObject playerNameItemPrefab;
+
+    [Header("Buttons")]
+    [SerializeField] private Button startGameButton;
+    [SerializeField] private Button leaveRoomButton;
+    [SerializeField] private Button configButton;
+    [SerializeField] private Button closeConfigButton;
+
+    [Header("Panels")]
+    [SerializeField] private GameObject panelRoom;
+    [SerializeField] private GameObject hostConfigPanel;
+
+    [Header("Start Game Warning")]
+    [SerializeField] private TextMeshProUGUI startWarningText; // text cáº£nh bÃ¡o Ä‘iá»u kiá»‡n chÆ°a Ä‘á»§
+
+    private NetworkRunner _runner;
+    private bool _isHost => _runner != null && _runner.IsServer;
+
+    void Start()
+    {
+        _runner = FindFirstObjectByType<NetworkRunner>();
+
+        joinTeamAButton.onClick.AddListener(() => RequestJoinTeam(0));
+        joinTeamBButton.onClick.AddListener(() => RequestJoinTeam(1));
+        leaveRoomButton.onClick.AddListener(OnLeaveRoom);
+
+        if (startGameButton != null)
+            startGameButton.onClick.AddListener(OnStartGame);
+        if (configButton != null)
+            configButton.onClick.AddListener(() => hostConfigPanel.SetActive(true));
+        if (closeConfigButton != null)
+            closeConfigButton.onClick.AddListener(() => hostConfigPanel.SetActive(false));
+
+        if (panelRoom)       panelRoom.SetActive(true);
+        if (hostConfigPanel) hostConfigPanel.SetActive(false);
+        if (startGameButton) startGameButton.gameObject.SetActive(_isHost);
+        if (configButton)    configButton.gameObject.SetActive(_isHost);
+        if (startWarningText) startWarningText.gameObject.SetActive(false);
+
+        if (_runner != null && roomNameText != null)
+            roomNameText.text = _runner.SessionInfo.Name;
+
+        StartCoroutine(SendNicknameWhenReady());
+        RefreshPlayerList();
+    }
+
+    void OnEnable()
+    {
+        if (_runner == null)
+            _runner = FindFirstObjectByType<NetworkRunner>();
+        RefreshPlayerList();
+    }
+
+    System.Collections.IEnumerator SendNicknameWhenReady()
+    {
+        while (_runner == null || RoomPlayerData.instance == null)
+        {
+            _runner = FindFirstObjectByType<NetworkRunner>();
+            yield return null;
+        }
+        string nick = LobbyManager.instance != null
+            ? LobbyManager.instance.GetLocalNickName()
+            : "Player";
+        RoomPlayerData.instance.RPC_RegisterPlayer(_runner.LocalPlayer, nick);
+    }
+
+    public void RefreshPlayerList()
+    {
+        if (_runner == null) return;
+
+        foreach (Transform c in teamAPlayerList) Destroy(c.gameObject);
+        foreach (Transform c in teamBPlayerList) Destroy(c.gameObject);
+
+        if (RoomPlayerData.instance == null)
+        {
+            if (roomStatusText != null) roomStatusText.text = "Äang chá»...";
+            return;
+        }
+
+        var slots = RoomPlayerData.instance.GetOccupied();
+        foreach (var slot in slots)
+        {
+            bool isLocal     = slot.PlayerRef == _runner.LocalPlayer;
+            Transform parent = slot.Team == 0 ? teamAPlayerList : teamBPlayerList;
+            AddPlayerItem(parent, slot.NickName.ToString(), isLocal, slot.PlayerRef, slot.Team);
+        }
+
+        StartCoroutine(RebuildNextFrame());
+
+        if (roomStatusText != null)
+            roomStatusText.text = $"Äang chá»... ({slots.Count}/{_runner.SessionInfo.MaxPlayers})";
+
+        // Cáº­p nháº­t tráº¡ng thÃ¡i nÃºt Báº®T Äáº¦U
+        if (_isHost) UpdateStartButton();
+    }
+
+    // Kiá»ƒm tra Ä‘iá»u kiá»‡n start game
+    string GetStartBlockReason()
+    {
+        if (RoomPlayerData.instance == null)
+            return "ChÆ°a sáºµn sÃ ng...";
+
+        var slots = RoomPlayerData.instance.GetOccupied();
+
+        int teamACount = 0, teamBCount = 0;
+        foreach (var s in slots)
+        {
+            if (s.Team == 0) teamACount++;
+            else             teamBCount++;
+        }
+
+        if (teamACount == 0 || teamBCount == 0)
+            return "Má»—i team cáº§n Ã­t nháº¥t 1 ngÆ°á»i!";
+
+        if (slots.Count < 2)
+            return "Cáº§n Ã­t nháº¥t 2 ngÆ°á»i chÆ¡i!";
+
+        // Kiá»ƒm tra config há»£p lá»‡
+        var config = FindFirstObjectByType<HostConfigManager>();
+        if (config != null && config.RoundTime == 0)
+            return "Cáº§n set thá»i gian tráº­n Ä‘áº¥u!";
+
+        return null; // null = khÃ´ng bá»‹ block
+    }
+
+    void UpdateStartButton()
+    {
+        if (startGameButton == null) return;
+
+        string reason = GetStartBlockReason();
+        bool canStart = reason == null;
+
+        // Dim button khi chÆ°a Ä‘á»§ Ä‘iá»u kiá»‡n
+        var colors = startGameButton.colors;
+        colors.normalColor = canStart
+            ? Color.white
+            : new Color(0.5f, 0.5f, 0.5f, 0.8f);
+        startGameButton.colors = colors;
+        startGameButton.interactable = canStart;
+
+        // Hiá»‡n warning text náº¿u cÃ³
+        if (startWarningText != null)
+        {
+            startWarningText.gameObject.SetActive(!canStart);
+            if (!canStart) startWarningText.text = reason;
+        }
+    }
+
+    System.Collections.IEnumerator RebuildNextFrame()
+    {
+        yield return null;
+        RebuildContent(teamAPlayerList);
+        RebuildContent(teamBPlayerList);
+    }
+
+    void RebuildContent(Transform content)
+    {
+        if (content == null) return;
+        var rect = content.GetComponent<RectTransform>();
+        if (rect != null) LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
+    }
+
+    void AddPlayerItem(Transform parent, string playerName, bool isLocal,
+                       PlayerRef playerRef, int currentTeam)
+    {
+        if (playerNameItemPrefab == null) return;
+
+        var item = Instantiate(playerNameItemPrefab, parent);
+
+        // Fix item height
+        var itemLE = item.GetComponent<LayoutElement>() ?? item.AddComponent<LayoutElement>();
+        itemLE.minHeight       = 50;
+        itemLE.preferredHeight = 50;
+        itemLE.flexibleHeight  = 0;
+
+        // Text tÃªn player
+        var text = item.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (text != null)
+        {
+            text.text      = playerName;
+            text.color     = isLocal ? new Color(1f, 0.9f, 0.2f) : Color.white;
+            text.fontSize  = 22;
+            text.alignment = TMPro.TextAlignmentOptions.MidlineLeft;
+            text.enableAutoSizing = false;
+
+            var trt = text.GetComponent<RectTransform>();
+            trt.anchorMin = new Vector2(0, 0);
+            trt.anchorMax = new Vector2(1, 1);
+            trt.offsetMin = new Vector2(6, 0);
+            trt.offsetMax = (_isHost && !isLocal)
+                ? new Vector2(-88, 0)
+                : new Vector2(-4, 0);
+        }
+
+        // Chá»‰ host má»›i tháº¥y cÃ¡c nÃºt Ä‘iá»u khiá»ƒn, khÃ´ng hiá»‡n trÃªn chÃ­nh mÃ¬nh
+        if (_isHost && !isLocal)
+        {
+            string arrow    = currentTeam == 0 ? "â†’" : "â†";
+            int    nextTeam = currentTeam == 0 ? 1 : 0;
+
+            var moveBtn = CreateAnchoredButton(item.transform, arrow,
+                new Color(0.3f, 0.8f, 0.3f), rightOffset: 44);
+            var capturedRef  = playerRef;
+            var capturedTeam = nextTeam;
+            moveBtn.onClick.AddListener(() => MovePlayer(capturedRef, capturedTeam));
+
+            var kickBtn = CreateAnchoredButton(item.transform, "X",
+                new Color(0.9f, 0.2f, 0.2f), rightOffset: 0);
+            var capturedKick = playerRef;
+            kickBtn.onClick.AddListener(() => KickPlayer(capturedKick));
+        }
+    }
+
+    Button CreateAnchoredButton(Transform parent, string label, Color bgColor, float rightOffset)
+    {
+        var go = new GameObject(label, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(1, 0);
+        rt.anchorMax = new Vector2(1, 1);
+        rt.pivot     = new Vector2(1, 0.5f);
+        rt.offsetMin = new Vector2(-rightOffset - 40, 4);
+        rt.offsetMax = new Vector2(-rightOffset, -4);
+
+        var img = go.AddComponent<Image>();
+        img.color         = bgColor;
+        img.raycastTarget = true;
+
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = img;
+        var cs = btn.colors;
+        cs.normalColor      = bgColor;
+        cs.highlightedColor = bgColor + new Color(0.2f, 0.2f, 0.2f);
+        cs.pressedColor     = bgColor * 0.7f;
+        cs.fadeDuration     = 0.05f;
+        btn.colors = cs;
+
+        var textGo = new GameObject("Label", typeof(RectTransform));
+        textGo.transform.SetParent(go.transform, false);
+
+        var trt = textGo.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero;
+        trt.anchorMax = Vector2.one;
+        trt.offsetMin = Vector2.zero;
+        trt.offsetMax = Vector2.zero;
+
+        var tmp = textGo.AddComponent<TextMeshProUGUI>();
+        tmp.text      = label;
+        tmp.fontSize  = 18;
+        tmp.color     = Color.white;
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+
+        return btn;
+    }
+
+    void MovePlayer(PlayerRef playerRef, int newTeam)
+    {
+        if (!_isHost || RoomPlayerData.instance == null) return;
+        RoomPlayerData.instance.RPC_RequestChangeTeam(playerRef, newTeam);
+    }
+
+    void KickPlayer(PlayerRef playerRef)
+    {
+        if (!_isHost || _runner == null) return;
+        _runner.Disconnect(playerRef);
+    }
+
+    void RequestJoinTeam(int team)
+    {
+        if (_runner == null || RoomPlayerData.instance == null) return;
+        RoomPlayerData.instance.RPC_RequestChangeTeam(_runner.LocalPlayer, team);
+    }
+
+    void OnLeaveRoom()
+    {
+        if (_runner != null) _ = _runner.Shutdown();
+    }
+
+    void OnStartGame()
+    {
+        if (!_isHost) return;
+
+        string reason = GetStartBlockReason();
+        if (reason != null)
+        {
+            if (startWarningText != null)
+            {
+                startWarningText.gameObject.SetActive(true);
+                startWarningText.text = reason;
+            }
+            return;
+        }
+
+        LobbyManager.instance.StartGame();
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Network\NetworkInputData.cs ==========
+using Fusion;
+using UnityEngine;
+
+public struct NetworkInputData : INetworkInput
+{
+    public Vector2     MoveDirection;
+    public Vector2     LookDelta;
+    public float       Yaw;
+    public NetworkBool Crouch;
+    public NetworkBool Fire;
+    public NetworkBool Reload;
+    public NetworkBool Sprint;
+    public NetworkBool SwitchToRifle;  // phÃ­m 1
+    public NetworkBool SwitchToPistol; // phÃ­m 2
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Network\NetworkPlayer.cs ==========
+using Fusion;
+using TMPro;
+using UnityEngine;
+
+public class NetworkPlayer : NetworkBehaviour
+{
+    [Networked] public int Team { get; set; }
+    [Networked] public NetworkString<_32> NickName { get; set; }
+
+    [Header("Team Materials")]
+    [SerializeField] private Material teamAMat;
+    [SerializeField] private Material teamBMat;
+
+    [Header("Nameplate")]
+    [SerializeField] private TextMeshProUGUI nameText;
+    [SerializeField] private Transform nameplateRoot;
+    [SerializeField] private Vector3 nameplateOffset = new Vector3(0, 0.3f, 0);
+
+    private SkinnedMeshRenderer _meshRenderer;
+    private Animator _animator;
+    private Transform _headBone;
+    private int _lastTeam = -1;
+    private string _lastNickName = "";
+
+    public override void Spawned()
+    {
+        var nt = GetComponent<NetworkTransform>();
+        if (nt != null) nt.enabled = false;
+
+        _meshRenderer = GetComponentInChildren<SkinnedMeshRenderer>();
+        _animator     = GetComponentInChildren<Animator>();
+
+        if (_animator != null)
+            _headBone = _animator.GetBoneTransform(HumanBodyBones.Head);
+
+        var cam = GetComponentInChildren<Camera>();
+        Debug.Log($"Spawned â€” HasInputAuthority: {Object.HasInputAuthority}, HasStateAuthority: {Object.HasStateAuthority}");
+
+        if (!Object.HasInputAuthority)
+        {
+            if (cam) cam.enabled = false;
+            var audio = GetComponentInChildren<AudioListener>();
+            if (audio) audio.enabled = false;
+        }
+        else
+        {
+            foreach (var r in GetComponentsInChildren<SkinnedMeshRenderer>())
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        }
+
+        if (nameplateRoot != null)
+            nameplateRoot.gameObject.SetActive(!Object.HasInputAuthority);
+
+        if (Object.HasStateAuthority)
+            NickName = PlayerPrefs.GetString("NickName", "Player");
+
+        ApplyTeamMaterial();
+        ApplyNickName();
+    }
+
+    // â”€â”€ Gá»i tá»« UIRoomManager khi player báº¥m Join Team â”€â”€
+    public void RequestChangeTeam(int newTeam)
+    {
+        // Chá»‰ local player cá»§a mÃ¬nh má»›i gá»i Ä‘Æ°á»£c
+        if (!Object.HasInputAuthority) return;
+        RPC_RequestTeam(newTeam);
+    }
+
+    // â”€â”€ Client gá»­i lÃªn host â”€â”€
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    void RPC_RequestTeam(int newTeam)
+    {
+        // Host kiá»ƒm tra há»£p lá»‡ rá»“i set
+        Team = newTeam;
+        // Sau khi set xong, broadcast Ä‘á»ƒ má»i client refresh UI
+        RPC_NotifyTeamChanged();
+    }
+
+    // â”€â”€ Host broadcast cho táº¥t cáº£ â”€â”€
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    void RPC_NotifyTeamChanged()
+    {
+        // Má»—i client tÃ¬m UIRoomManager vÃ  refresh
+        FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
+    }
+
+    public override void Render()
+    {
+        if (Team != _lastTeam)
+        {
+            _lastTeam = Team;
+            ApplyTeamMaterial();
+            ApplyNickName();
+        }
+
+        string currentNick = NickName.ToString();
+        if (currentNick != _lastNickName)
+        {
+            _lastNickName = currentNick;
+            ApplyNickName();
+        }
+
+        if (nameplateRoot != null && _headBone != null && nameplateRoot.gameObject.activeSelf)
+        {
+            nameplateRoot.position = _headBone.position + nameplateOffset;
+            var cam = Camera.main;
+            if (cam != null)
+                nameplateRoot.rotation = Quaternion.LookRotation(
+                    nameplateRoot.position - cam.transform.position);
+        }
+    }
+
+    void ApplyTeamMaterial()
+    {
+        if (_meshRenderer == null) return;
+        if (Team == 0 && teamAMat != null)
+            _meshRenderer.material = teamAMat;
+        else if (Team == 1 && teamBMat != null)
+            _meshRenderer.material = teamBMat;
+    }
+
+    void ApplyNickName()
+    {
+        if (nameText == null) return;
+        nameText.text = NickName.ToString();
+
+        int localTeam = -1;
+        foreach (var p in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
+        {
+            if (p.Object.HasInputAuthority) { localTeam = p.Team; break; }
+        }
+
+        nameText.color = (localTeam == -1 || Team == localTeam)
+            ? Color.white : Color.red;
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Network\RoomPlayerData.cs ==========
+using System.Collections.Generic;
+using Fusion;
+using UnityEngine;
+
+public struct PlayerSlot : INetworkStruct {
+    public PlayerRef          PlayerRef;
+    public NetworkString<_32> NickName;
+    public int                Team;
+    public NetworkBool        IsOccupied;
+    public int                TeamJoinTick; // tick khi join team, dÃ¹ng Ä‘á»ƒ sort
+}
+
+public class RoomPlayerData : NetworkBehaviour {
+    public static RoomPlayerData instance;
+
+    [Networked, Capacity(8)]
+    public NetworkArray<PlayerSlot> Slots => default;
+
+    // Room config â€” sync tá»« host xuá»‘ng táº¥t cáº£ client
+    [Networked] public int WaitTime   { get; set; } = 30;
+    [Networked] public int PistolTime { get; set; } = 60;
+    [Networked] public int RifleTime  { get; set; } = 120;
+    public int RoundTime => PistolTime + RifleTime;
+
+    private ChangeDetector _changeDetector;
+
+    public override void Spawned() {
+        instance = this;
+        _changeDetector = GetChangeDetector(ChangeDetector.Source.SimulationState);
+        FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
+    }
+
+    public override void Render() {
+        foreach (var change in _changeDetector.DetectChanges(this)) {
+            if (change == nameof(Slots))
+                FindFirstObjectByType<UIRoomManager>()?.RefreshPlayerList();
+        }
+    }
+
+    // â”€â”€ Player management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    public void ServerAddPlayer(PlayerRef player, string nickName) {
+        if (!Object.HasStateAuthority) return;
+
+        // Náº¿u player Ä‘Ã£ tá»“n táº¡i thÃ¬ bá» qua
+        for (int i = 0; i < Slots.Length; i++) {
+            var s = Slots.Get(i);
+            if (s.IsOccupied && s.PlayerRef == player) return;
+        }
+
+        // TÃ¬m slot trá»‘ng
+        for (int i = 0; i < Slots.Length; i++) {
+            if (!Slots.Get(i).IsOccupied) {
+                // CÃ¢n báº±ng team: ai vÃ o trÆ°á»›c thÃ¬ vÃ o team Ã­t ngÆ°á»i hÆ¡n
+                int teamA = 0, teamB = 0;
+                for (int j = 0; j < Slots.Length; j++) {
+                    var slot = Slots.Get(j);
+                    if (slot.IsOccupied) {
+                        if (slot.Team == 0) teamA++;
+                        else teamB++;
+                    }
+                }
+                int team = teamA <= teamB ? 0 : 1;
+
+                Slots.Set(i, new PlayerSlot {
+                    PlayerRef    = player,
+                    NickName     = nickName,
+                    Team         = team,
+                    IsOccupied   = true,
+                    TeamJoinTick = Runner.Tick
+                });
+
+                Debug.Log($"[RoomPlayerData] Add player {player} vÃ o team {team}");
+                return;
+            }
+        }
+    }
+
+    public void ServerRemovePlayer(PlayerRef player) {
+        if (!Object.HasStateAuthority) return;
+        for (int i = 0; i < Slots.Length; i++) {
+            var slot = Slots.Get(i);
+            if (slot.IsOccupied && slot.PlayerRef == player) {
+                Slots.Set(i, default);
+                return;
+            }
+        }
+    }
+
+    [Rpc(RpcSources.Proxies | RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    public void RPC_RegisterPlayer(PlayerRef player, string nick) {
+        for (int i = 0; i < Slots.Length; i++) {
+            var slot = Slots.Get(i);
+            if (slot.IsOccupied && slot.PlayerRef == player) {
+                slot.NickName = nick;
+                Slots.Set(i, slot);
+                Debug.Log($"[RoomPlayerData] Register player {player} nickname={nick}");
+                return;
+            }
+        }
+    }
+
+    [Rpc(RpcSources.Proxies | RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    public void RPC_RequestChangeTeam(PlayerRef player, int team) {
+        for (int i = 0; i < Slots.Length; i++) {
+            var slot = Slots.Get(i);
+            if (slot.IsOccupied && slot.PlayerRef == player) {
+                slot.Team         = team;
+                slot.TeamJoinTick = Runner.Tick;
+                Slots.Set(i, slot);
+                Debug.Log($"[RoomPlayerData] Player {player} Ä‘á»•i sang team {team}");
+                return;
+            }
+        }
+    }
+
+    [Rpc(RpcSources.Proxies | RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    public void RPC_UpdateMyNickname(PlayerRef player, string nick) {
+        RPC_RegisterPlayer(player, nick);
+    }
+
+    // â”€â”€ Room config sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    [Rpc(RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    public void RPC_UpdateRoomConfig(int waitTime, int pistolTime, int rifleTime) {
+        WaitTime   = waitTime;
+        PistolTime = pistolTime;
+        RifleTime  = rifleTime;
+        Debug.Log($"[RoomPlayerData] Update room config: Wait={waitTime}, Pistol={pistolTime}, Rifle={rifleTime}");
+    }
+
+    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    public List<PlayerSlot> GetOccupied() {
+        var result = new List<PlayerSlot>();
+        for (int i = 0; i < Slots.Length; i++)
+            if (Slots.Get(i).IsOccupied)
+                result.Add(Slots.Get(i));
+        result.Sort((a, b) => a.TeamJoinTick.CompareTo(b.TeamJoinTick));
+        return result;
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\DeathScreenUI.cs ==========
+                  // cho TextMeshProUGUI
+using UnityEngine;
+using TMPro;
+using System.Collections;
+  // cho IEnumerator
+
+public class DeathScreenUI : MonoBehaviour
+{
+    [SerializeField] private GameObject deathPanel;
+    [SerializeField] private TextMeshProUGUI respawnText;
+
+    void OnEnable()  => PlayerHealth.OnPlayerDied += OnDied;
+    void OnDisable() => PlayerHealth.OnPlayerDied -= OnDied;
+
+    void OnDied(PlayerHealth health)
+    {
+        if (!health.Object.HasInputAuthority) return;
+        deathPanel.SetActive(true);
+        StartCoroutine(CountdownRespawn(3f));
+    }
+
+    IEnumerator CountdownRespawn(float delay)
+    {
+        float t = delay;
+        while (t > 0)
+        {
+            if (respawnText) respawnText.text = $"Há»“i sinh sau: {Mathf.CeilToInt(t)}";
+            yield return null;
+            t -= Time.deltaTime;
+        }
+        deathPanel.SetActive(false);
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\HPDisplay.cs ==========
+using UnityEngine;
+using TMPro;
+using UnityEngine.UI;
+
+public class HPDisplay : MonoBehaviour
+{
+    [SerializeField] private TextMeshProUGUI hpText;
+    [SerializeField] private Slider hpSlider;
+
+    void OnEnable()  => PlayerHealth.OnHealthChanged += UpdateHP;
+    void OnDisable() => PlayerHealth.OnHealthChanged -= UpdateHP;
+
+    void UpdateHP(PlayerHealth health)
+    {
+        // Chá»‰ update UI cho chÃ­nh ngÆ°á»i chÆ¡i cÃ³ InputAuthority
+        if (!health.Object.HasInputAuthority) return;
+
+        if (hpText)   hpText.text = health.Health.ToString();
+        if (hpSlider) hpSlider.value = health.Health / 100f;
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\LobbyUI.cs ==========
+using System.Collections.Generic;
+using Fusion;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class LobbyUI : MonoBehaviour
+{
+    [Header("Login")]
+    [SerializeField] private TMP_InputField nickNameInput;
+    [SerializeField] private Button connectButton;
+
+    [Header("Room - Create")]
+    [SerializeField] private TMP_InputField roomNameCreateInput;
+    [SerializeField] private Button createButton;
+
+    [Header("Room - Join")]
+    [SerializeField] private TMP_InputField roomNameJoinInput;
+    [SerializeField] private Button joinButton;
+
+    [Header("Room List")]
+    [SerializeField] private Transform roomListContent;
+    [SerializeField] private UIRoomProfile roomProfilePrefab;
+
+    [Header("Status")]
+    [SerializeField] private TextMeshProUGUI statusText;
+
+    [Header("Canvas Navigation")]
+    [SerializeField] private GameObject canvasMainMenu;
+    [SerializeField] private GameObject canvasLobby;
+    [SerializeField] private GameObject canvasSettings;
+    [SerializeField] private GameObject canvasRoom;
+
+    // LÆ°u trong memory, khÃ´ng dÃ¹ng PlayerPrefs Ä‘á»ƒ trÃ¡nh share giá»¯a 2 instance
+    private static string _sessionNickName = "";
+    private static string _sessionRoomName = "";
+
+    void Start()
+    {
+        // Má»—i láº§n Start, náº¿u chÆ°a cÃ³ tÃªn thÃ¬ random má»›i
+        if (string.IsNullOrEmpty(_sessionNickName))
+            _sessionNickName = "Player" + Random.Range(100, 999);
+
+        nickNameInput.text = _sessionNickName;
+        roomNameCreateInput.text = "Room" + Random.Range(1, 100);
+        roomNameJoinInput.text = _sessionRoomName;
+
+        connectButton.onClick.AddListener(OnConnectClick);
+        createButton.onClick.AddListener(OnCreateClick);
+        joinButton.onClick.AddListener(OnJoinClick);
+
+        createButton.interactable = false;
+        joinButton.interactable = false;
+
+        LobbyManager.instance.OnRoomListUpdated += RefreshRoomList;
+        LobbyManager.instance.OnJoinFailed += OnJoinFailed;
+        LobbyManager.instance.OnConnected += OnConnectedSuccess;
+        LobbyManager.instance.OnRoomJoined += OnRoomJoined;
+
+        var existing = LobbyManager.instance.GetRoomList();
+        if (existing != null && existing.Count > 0)
+            RefreshRoomList(existing);
+    }
+
+    void OnEnable()
+    {
+        if (LobbyManager.instance == null) return;
+        var existing = LobbyManager.instance.GetRoomList();
+        if (existing != null && existing.Count > 0)
+            RefreshRoomList(existing);
+    }
+
+    void OnDestroy()
+    {
+        if (LobbyManager.instance == null) return;
+        LobbyManager.instance.OnRoomListUpdated -= RefreshRoomList;
+        LobbyManager.instance.OnJoinFailed -= OnJoinFailed;
+        LobbyManager.instance.OnConnected -= OnConnectedSuccess;
+        LobbyManager.instance.OnRoomJoined -= OnRoomJoined;
+    }
+
+    void OnConnectClick()
+    {
+        string nick = nickNameInput.text.Trim();
+        if (string.IsNullOrEmpty(nick)) nick = "Player" + Random.Range(100, 999);
+
+        // LÆ°u vÃ o session memory, KHÃ”NG ghi PlayerPrefs
+        _sessionNickName = nick;
+
+        SetStatus("Äang káº¿t ná»‘i...");
+        connectButton.interactable = false;
+
+        // Truyá»n nick trá»±c tiáº¿p, khÃ´ng qua PlayerPrefs
+        LobbyManager.instance.Connect(nick);
+    }
+
+    void OnConnectedSuccess()
+    {
+        createButton.interactable = true;
+        joinButton.interactable = true;
+        SetStatus("ÄÃ£ káº¿t ná»‘i. Sáºµn sÃ ng chÆ¡i.");
+    }
+
+    void OnCreateClick()
+    {
+        string room = roomNameCreateInput.text.Trim();
+        if (string.IsNullOrEmpty(room)) room = "Room" + Random.Range(1, 999);
+        SetStatus("Äang táº¡o phÃ²ng: " + room);
+        createButton.interactable = false;
+        joinButton.interactable = false;
+        LobbyManager.instance.CreateRoom(room);
+    }
+
+    void OnJoinClick()
+    {
+        string room = roomNameJoinInput.text.Trim();
+        if (string.IsNullOrEmpty(room))
+        {
+            SetStatus("Nháº­p tÃªn phÃ²ng hoáº·c chá»n tá»« danh sÃ¡ch!");
+            return;
+        }
+        _sessionRoomName = room;
+        SetStatus("Äang vÃ o phÃ²ng: " + room);
+        createButton.interactable = false;
+        joinButton.interactable = false;
+        LobbyManager.instance.JoinRoom(room);
+    }
+
+    void OnRoomJoined()
+    {
+        canvasLobby.SetActive(false);
+        canvasRoom.SetActive(true);
+    }
+
+    void RefreshRoomList(List<SessionInfo> sessions)
+    {
+        foreach (Transform child in roomListContent)
+            Destroy(child.gameObject);
+
+        if (sessions == null || sessions.Count == 0)
+        {
+            SetStatus("ChÆ°a cÃ³ phÃ²ng nÃ o. HÃ£y táº¡o phÃ²ng má»›i!");
+            return;
+        }
+
+        foreach (SessionInfo session in sessions)
+        {
+            if (!session.IsOpen || !session.IsVisible) continue;
+            UIRoomProfile item = Instantiate(roomProfilePrefab, roomListContent);
+            item.Setup(new RoomProfile
+            {
+                name = session.Name,
+                playerCount = session.PlayerCount,
+                maxPlayers = session.MaxPlayers
+            }, OnRoomClick);
+        }
+    }
+
+    void OnRoomClick(string roomName)
+    {
+        roomNameJoinInput.text = roomName;
+        SetStatus($"ÄÃ£ chá»n: {roomName} â€” Nháº¥n JOIN Ä‘á»ƒ vÃ o.");
+    }
+
+    void OnJoinFailed(string reason)
+    {
+        SetStatus("Tháº¥t báº¡i: " + reason);
+        createButton.interactable = true;
+        joinButton.interactable = true;
+        connectButton.interactable = true;
+    }
+
+    void SetStatus(string msg)
+    {
+        if (statusText != null) statusText.text = msg;
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\MainMenuUI.cs ==========
+using UnityEngine;
+using UnityEngine.UI;
+
+public class MainMenuUI : MonoBehaviour
+{
+    [SerializeField] private Button playButton;       // Button_Play
+    [SerializeField] private Button settingButton;    // Button_Setting
+    [SerializeField] private Button quitButton;       // Button_Quit
+
+    [Header("Canvas References")]
+    [SerializeField] private GameObject canvasMainMenu;   // Canvas_MainMenu (self)
+    [SerializeField] private GameObject canvasLobby;      // Canvas_Lobby
+    [SerializeField] private GameObject canvasSettings;   // Canvas_Settings
+
+    void Start()
+    {
+        playButton.onClick.AddListener(OnPlayClick);
+        settingButton.onClick.AddListener(OnSettingClick);
+        quitButton.onClick.AddListener(OnQuitClick);
+
+        // Äáº£m báº£o chá»‰ MainMenu hiá»‡n lÃºc Ä‘áº§u
+        ShowMainMenu();
+    }
+
+    void ShowMainMenu()
+    {
+        canvasMainMenu.SetActive(true);
+        canvasLobby.SetActive(false);
+        canvasSettings.SetActive(false);
+    }
+
+    void OnPlayClick()
+    {
+        canvasMainMenu.SetActive(false);
+        canvasLobby.SetActive(true);
+    }
+
+    void OnSettingClick()
+    {
+        // Settings lÃ  overlay â€” MainMenu váº«n giá»¯ nguyÃªn phÃ­a sau
+        canvasSettings.SetActive(true);
+    }
+
+    void OnQuitClick()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\Minimap.cs ==========
+
+using UnityEngine;
+
+public class Minimap : MonoBehaviour
+{
+
+
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\ScoreboardToggle.cs ==========
+using UnityEngine;
+
+public class ScoreboardToggle : MonoBehaviour
+{
+    [SerializeField] private GameObject scoreboardPanel;
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Tab))
+            scoreboardPanel.SetActive(true);
+        if (Input.GetKeyUp(KeyCode.Tab))
+            scoreboardPanel.SetActive(false);
+    }
+}
+
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\SettingsUI.cs ==========
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+/// <summary>
+/// TODO khi game hoÃ n thiá»‡n:
+/// - MouseSensitivity thÃ´ng vá»›i FPSCamera.cs
+/// - MasterVolume thÃ´ng vá»›i AudioMixer
+/// </summary>
+public class SettingsUI : MonoBehaviour
+{
+    [Header("Sliders â€” tÃªn trong scene")]
+    [SerializeField] private Slider masterVolumeSlider;   // Slider_MasterVolume
+    [SerializeField] private Slider mouseSensSlider;      // Slider_MouseSens
+
+    [Header("Value Display (optional)")]
+    [SerializeField] private TextMeshProUGUI volumeValueText;
+    [SerializeField] private TextMeshProUGUI sensValueText;
+
+    [Header("Buttons")]
+    [SerializeField] private Button closeButton;          // Button_Close
+
+    // Keys PlayerPrefs
+    private const string KEY_VOLUME = "MasterVolume";
+    private const string KEY_SENS   = "MouseSensitivity";
+
+    // Default values
+    private const float DEFAULT_VOLUME = 1f;
+    private const float DEFAULT_SENS   = 2f;
+
+    void Start()
+    {
+        // Load giÃ¡ trá»‹ Ä‘Ã£ lÆ°u
+        masterVolumeSlider.value = PlayerPrefs.GetFloat(KEY_VOLUME, DEFAULT_VOLUME);
+        mouseSensSlider.value    = PlayerPrefs.GetFloat(KEY_SENS,   DEFAULT_SENS);
+
+        UpdateDisplayTexts();
+
+        // Gáº¯n listener
+        masterVolumeSlider.onValueChanged.AddListener(OnVolumeChanged);
+        mouseSensSlider.onValueChanged.AddListener(OnSensChanged);
+        closeButton.onClick.AddListener(OnClose);
+    }
+
+    void OnVolumeChanged(float value)
+    {
+        PlayerPrefs.SetFloat(KEY_VOLUME, value);
+        UpdateDisplayTexts();
+
+        // TODO: AudioMixer.SetFloat("MasterVolume", Mathf.Log10(value) * 20);
+    }
+
+    void OnSensChanged(float value)
+    {
+        PlayerPrefs.SetFloat(KEY_SENS, value);
+        UpdateDisplayTexts();
+
+        // TODO: thÃ´ng vá»›i FPSCamera khi cÃ³ Ä‘áº§y Ä‘á»§
+        // FPSCamera.SetSensitivity(value);
+    }
+
+    void UpdateDisplayTexts()
+    {
+        if (volumeValueText != null)
+            volumeValueText.text = Mathf.RoundToInt(masterVolumeSlider.value * 100) + "%";
+
+        if (sensValueText != null)
+            sensValueText.text = mouseSensSlider.value.ToString("F1");
+    }
+
+    void OnClose()
+    {
+        PlayerPrefs.Save();
+        gameObject.SetActive(false);
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\UI\UIRoomProfile.cs ==========
+using System;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class UIRoomProfile : MonoBehaviour
+{
+    [SerializeField] private TextMeshProUGUI roomNameText;
+    [SerializeField] private TextMeshProUGUI playerCountText;
+    [SerializeField] private Button selectButton;
+
+    private RoomProfile _roomProfile;
+    private Action<string> _onClickCallback;
+
+    public void Setup(RoomProfile profile, Action<string> onClickCallback)
+    {
+        _roomProfile = profile;
+        _onClickCallback = onClickCallback;
+
+        // áº¨n háº¿t, chá»‰ dÃ¹ng roomNameText + button trÃªn toÃ n bá»™ item
+        if (playerCountText != null)
+            playerCountText.gameObject.SetActive(false);
+
+        if (selectButton != null)
+            selectButton.gameObject.SetActive(false);
+
+        if (roomNameText != null)
+        {
+            roomNameText.text = $"{profile.name}   {profile.playerCount}/{profile.maxPlayers}   [Chá»n]";
+            roomNameText.color = Color.white;
+            roomNameText.fontSize = 28;
+
+            // Anchor stretch toÃ n bá»™ item
+            var rt = roomNameText.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(8, 0);
+            rt.offsetMax = new Vector2(-8, 0);
+        }
+
+        // Click vÃ o toÃ n bá»™ item = chá»n phÃ²ng
+        var itemButton = gameObject.GetComponent<Button>();
+        if (itemButton == null)
+            itemButton = gameObject.AddComponent<Button>();
+
+        itemButton.onClick.RemoveAllListeners();
+        itemButton.onClick.AddListener(() => _onClickCallback?.Invoke(_roomProfile.name));
+    }
+}
+
+
+// ========== D:\work\RiotStrike\Assets\_Project\Scripts\Utils\SceneLoader.cs ==========
+using UnityEngine.SceneManagement;
+
+public static class SceneLoader
+{
+    public static void LoadMainMenu() => SceneManager.LoadScene("MainMenu");
+    public static void LoadLobby() => SceneManager.LoadScene("Lobby");
+    public static void LoadGame() => SceneManager.LoadScene("Game");
+}
+
+
