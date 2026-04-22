@@ -11,6 +11,12 @@ public class ScoreboardToggle : MonoBehaviour
     private ScoreboardUI _scoreboardUI;
     private bool _panelInitialized = false;
 
+    void Awake()
+    {
+        // Log này PHẢI xuất hiện khi scene load. Nếu không thấy → component không active.
+        Debug.Log($"[ScoreboardToggle] Awake trên {gameObject.name} (active={gameObject.activeInHierarchy})");
+    }
+
     void Start()
     {
         // Cố gắng tìm trong Start() — nếu player chưa spawn thì Update() sẽ retry

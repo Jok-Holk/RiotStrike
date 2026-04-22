@@ -42,6 +42,10 @@ public class TimerManager : NetworkBehaviour
         if (!Object.HasStateAuthority) return;
         if (_networkTime <= 0) return;
 
+        // Phase 1: SafeZone đang đếm ngược → round timer chưa chạy
+        // Chỉ bắt đầu đếm khi SafeZoneManager báo game đã start (hết chờ)
+        if (SafeZoneManager.instance != null && !SafeZoneManager.instance.GameStarted) return;
+
         _networkTime -= Runner.DeltaTime;
 
         if (!_rifleUnlocked && _networkTime <= (totalTime - pistolOnlyDuration))
@@ -59,6 +63,24 @@ public class TimerManager : NetworkBehaviour
 
     void UpdateUI()
     {
+        // Phase 1: SafeZone countdown → hiện đếm ngược WaitTime
+        if (SafeZoneManager.instance != null && !SafeZoneManager.instance.GameStarted)
+        {
+            float waitLeft = SafeZoneManager.instance.GetCountdown();
+            if (timerText)
+            {
+                timerText.text  = Mathf.CeilToInt(waitLeft).ToString();
+                timerText.color = Color.white;
+            }
+            if (phaseText)
+            {
+                phaseText.text  = "CHUẨN BỊ...";
+                phaseText.color = Color.white;
+            }
+            return;
+        }
+
+        // Phase 2: Round timer
         float t = Mathf.Max(0, _networkTime);
         int minutes = Mathf.FloorToInt(t / 60);
         int seconds = Mathf.FloorToInt(t % 60);

@@ -104,18 +104,23 @@ public class PlayerHealth : NetworkBehaviour
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     void RPC_OnRespawned()
     {
-        // Reset animator về idle khi sống lại
+        var fps = GetComponent<FPSController>();
         var pac = GetComponent<PlayerAnimatorController>();
+        var wc  = GetComponent<WeaponController>();
+
+        // 1. Mở khóa movement (IsDead = false)
+        fps?.TriggerRespawn();
+
+        // 2. CrossFade về idle tương ứng vũ khí hiện tại
+        //    slot=0(pistol) → animType=1(PistolIdle) | slot=1(rifle) → animType=0(RifleIdle)
         if (pac != null)
         {
-            // Reset trigger Death nếu còn pending
-            var animator = GetComponentInChildren<Animator>();
-            if (animator != null)
-            {
-                animator.ResetTrigger("Death");
-                animator.SetTrigger("Respawn"); // cần state Respawn trong animator, hoặc bỏ qua
-            }
+            int animType = (wc != null && wc.CurrentSlot == 1) ? 0 : 1;
+            pac.SetWeaponType(animType);
         }
-        Debug.Log($"[PlayerHealth] {gameObject.name} respawned");
+
+        // 3. Cập nhật HUD HP
+        OnHealthChanged?.Invoke(this);
+        Debug.Log($"[PlayerHealth] {gameObject.name} respawned → IsDead reset, idle animation");
     }
 }

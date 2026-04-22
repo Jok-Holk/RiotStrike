@@ -33,6 +33,10 @@ public class FPSController : NetworkBehaviour
     public bool IsCrouching => _isCrouching;
     public bool IsGrounded  => _cc != null && _cc.isGrounded;
 
+    // IsDead = true khi player chết (set qua RPC_OnDied → TriggerDeath).
+    // FixedUpdateNetwork và WeaponController đọc flag này để khóa input.
+    public bool IsDead { get; private set; } = false;
+
     public void InitSpawnPosition(Vector3 pos)
     {
         if (_cc == null) _cc = GetComponent<CharacterController>();
@@ -76,18 +80,20 @@ public class FPSController : NetworkBehaviour
     {
         if (!GetInput(out NetworkInputData input)) return;
 
-        NetworkedYaw = input.Yaw;
-        NetworkedForward = input.MoveDirection.y;
-        NetworkedStrafe = input.MoveDirection.x;
-        LastForward = input.MoveDirection.y;
-        LastStrafe = input.MoveDirection.x;
+        bool gameEnded = GameManager.instance != null && GameManager.instance.GameEnded;
+        bool locked    = gameEnded || IsDead;  // khóa input khi chết hoặc endgame
+
+        NetworkedYaw     = input.Yaw;           // camera xoay vẫn ok (nhìn UI / deathcam)
+        NetworkedForward = locked ? 0f : input.MoveDirection.y;
+        NetworkedStrafe  = locked ? 0f : input.MoveDirection.x;
+        LastForward = NetworkedForward;
+        LastStrafe  = NetworkedStrafe;
 
         if (!Object.HasStateAuthority) return;
 
-        // Fix nghiêng 45 độ: dùng AngleAxis thay Euler để đảm bảo rotation thuần Y
         transform.rotation = Quaternion.AngleAxis(NetworkedYaw, Vector3.up);
         HandleCrouch(input);
-        HandleMovement(input);
+        if (!locked) HandleMovement(input);
         ApplyGravity();
         NetworkedPosition = transform.position;
     }
@@ -149,9 +155,23 @@ public class FPSController : NetworkBehaviour
         _cc.Move(_velocity * Runner.DeltaTime);
     }
 
-    public void TriggerHit() => GetComponent<PlayerAnimatorController>()?.TriggerHit();
-    public void TriggerDeath() => GetComponent<PlayerAnimatorController>()?.TriggerDeath();
-    public void TriggerFire() => GetComponent<PlayerAnimatorController>()?.TriggerFire();
+    public void TriggerHit()    => GetComponent<PlayerAnimatorController>()?.TriggerHit();
+    public void TriggerFire()   => GetComponent<PlayerAnimatorController>()?.TriggerFire();
     public void TriggerReload() => GetComponent<PlayerAnimatorController>()?.TriggerReload();
     public void SetWeaponType(int type) => GetComponent<PlayerAnimatorController>()?.SetWeaponType(type);
+
+    /// Gọi qua RPC_OnDied → chạy trên mọi client. Khóa movement + bật animation chết.
+    public void TriggerDeath()
+    {
+        IsDead = true;
+        GetComponent<PlayerAnimatorController>()?.TriggerDeath();
+        Debug.Log($"[FPS] TriggerDeath — IsDead=true on {gameObject.name}");
+    }
+
+    /// Gọi qua RPC_OnRespawned → chạy trên mọi client. Mở khóa movement.
+    public void TriggerRespawn()
+    {
+        IsDead = false;
+        Debug.Log($"[FPS] TriggerRespawn — IsDead=false on {gameObject.name}");
+    }
 }

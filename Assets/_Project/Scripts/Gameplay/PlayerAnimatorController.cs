@@ -41,15 +41,20 @@ public class PlayerAnimatorController : MonoBehaviour
             return;
         }
 
-        // Chỉ set WeaponType khi giá trị thay đổi.
-        // Gọi SetInteger mỗi frame với cùng giá trị vẫn trigger transition evaluation trong Unity Animator,
-        // gây ra "Any State → RifleIdle" tự loop lại (nếu Can Transition To Self = true) → jitter.
-        // Guard này ngăn transition thừa. Nếu jitter vẫn xảy ra → trong Animator Controller Unity,
-        // kiểm tra các transition từ Any State: tắt "Can Transition To Self" và "Has Exit Time".
+        // Animation jitter fix:
+        // Vấn đề: "Any State → RifleIdle/PistolIdle" trong Animator Controller được Unity
+        // đánh giá LẠI mỗi frame. Nếu condition WeaponType==0 và ta đang ở RifleIdle,
+        // và "Can Transition To Self = true" (Unity mặc định), nó restart animation mỗi frame → jitter.
+        //
+        // Fix: Set WeaponType = -1 (không khớp bất kỳ condition nào) rồi dùng CrossFade để
+        // đặt thẳng vào state đúng. Any State transitions không còn condition thỏa mãn → không fire.
+        // Trigger-based transitions (Fire, Death, Hit, Reload) vẫn hoạt động bình thường.
         if (_appliedWeaponType != _targetWeaponType)
         {
-            _animator.SetInteger("WeaponType", _targetWeaponType);
             _appliedWeaponType = _targetWeaponType;
+            _animator.SetInteger("WeaponType", -1);           // tắt Any State conditions
+            string idle = _targetWeaponType == 0 ? "RifleIdle" : "PistolIdle";
+            _animator.CrossFade(idle, 0.1f);                  // force vào đúng state, không qua Any State
         }
 
         float forward = Mathf.Abs(_fpsController.LastForward) < 0.001f ? 0f : _fpsController.LastForward;
@@ -78,7 +83,7 @@ public class PlayerAnimatorController : MonoBehaviour
     public void SetWeaponType(int type)
     {
         _targetWeaponType  = type;
-        _appliedWeaponType = -1; // force re-apply next Update()
-        _animator?.SetInteger("WeaponType", type);
+        _appliedWeaponType = -1; // force CrossFade trong Update() frame tiếp theo
+        // Không gọi SetInteger ở đây — Update() sẽ set -1 + CrossFade để tránh jitter
     }
 }
