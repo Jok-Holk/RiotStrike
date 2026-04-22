@@ -178,14 +178,11 @@ public class SafeZoneManager : NetworkBehaviour
 
     public override void Render()
     {
-        // Detect khi GameStarted flip true → deactivate barriers trên mọi client
-        foreach (var change in _changeDetector.DetectChanges(this))
+        // Poll mỗi frame thay vì ChangeDetector — đảm bảo chạy trên cả host lẫn client
+        if (GameStarted && !_barriersDeactivated)
         {
-            if (change == nameof(GameStarted) && GameStarted)
-            {
-                Debug.Log("[SafeZoneManager] GameStarted → Deactivate barriers!");
-                DeactivateBarriers();
-            }
+            Debug.Log("[SafeZoneManager] GameStarted → Deactivate barriers!");
+            DeactivateBarriers();
         }
     }
 
@@ -214,13 +211,23 @@ public class SafeZoneManager : NetworkBehaviour
         }
 
         // Pass 3: Tắt trực tiếp tất cả Collider trên barriers đã tìm được
-        // để đảm bảo không còn block raycast dù SetActive bị fail vì lý do nào đó.
         foreach (var b in _barriersA)
             if (b != null) foreach (var col in b.GetComponentsInChildren<Collider>()) col.enabled = false;
         foreach (var b in _barriersB)
             if (b != null) foreach (var col in b.GetComponentsInChildren<Collider>()) col.enabled = false;
 
-        Debug.Log("[SafeZoneManager] Barriers deactivated (tag + layer + collider disabled).");
+        // Pass 4: Tìm bằng tên — bắt SafeZone_VisualA/B và các object không có tag/layer đúng
+        foreach (var go in FindObjectsByType<GameObject>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+        {
+            if (go.name.Contains("SafeZone") || go.name.Contains("Barrier") || go.name.Contains("barrier"))
+            {
+                go.SetActive(false);
+                foreach (var col in go.GetComponentsInChildren<Collider>(true))
+                    col.enabled = false;
+            }
+        }
+
+        Debug.Log("[SafeZoneManager] Barriers deactivated (tag + layer + collider + name search).");
     }
 
     public void OnPlayerLeftSafeZone(int teamID)

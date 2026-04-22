@@ -144,6 +144,10 @@ public class WeaponController : NetworkBehaviour
     {
         if (!GetInput(out NetworkInputData input)) return;
 
+        // Chặn input khi game ended hoặc player đang chết
+        if (GameManager.instance != null && GameManager.instance.GameEnded) return;
+        if (_fpsController != null && _fpsController.IsDead) return;
+
         // InputAuthority (người chơi local) nhấn R → gửi RPC trực tiếp lên StateAuthority (host).
         // Đây là cách đáng tin cậy nhất — không phụ thuộc vào GetInput trên host
         // hay HasStateAuthority gate (vốn block Player:2 client từ xử lý FixedUpdateNetwork).
@@ -209,7 +213,8 @@ public class WeaponController : NetworkBehaviour
             && !isReloading && CurrentAmmo > 0)
         {
             CurrentAmmo--;
-            _fireTimer = TickTimer.CreateFromSeconds(Runner, 1f / _currentWeapon.fireRate);
+            float safeFireRate = (_currentWeapon.fireRate > 0f) ? _currentWeapon.fireRate : 5f;
+            _fireTimer = TickTimer.CreateFromSeconds(Runner, 1f / safeFireRate);
             ServerFire();
         }
 
@@ -244,16 +249,20 @@ public class WeaponController : NetworkBehaviour
         RPC_NotifyFire();
         if (!Runner.IsForward) return;
 
+        float range  = (_currentWeapon != null && _currentWeapon.range  > 0f) ? _currentWeapon.range  : 100f;
+        int   damage = (_currentWeapon != null && _currentWeapon.damage  > 0)  ? _currentWeapon.damage  : 25;
+        Debug.Log($"[WC] Fire | weapon={_currentWeapon?.name} range={range} dmg={damage} mask={shootableMask.value}");
+
         Vector3 eyePos  = transform.position + Vector3.up * EYE_HEIGHT;
         Vector3 forward = Quaternion.Euler(_lastInputPitch, _lastInputYaw, 0f) * Vector3.forward;
         var ray = new Ray(eyePos, forward);
-        Debug.DrawLine(ray.origin, ray.origin + forward * _currentWeapon.range, Color.yellow, 0.5f);
+        Debug.DrawLine(ray.origin, ray.origin + forward * range, Color.yellow, 0.5f);
 
-        RaycastHit[] hits = (shootableMask.value == 0)
-            ? Physics.RaycastAll(ray, _currentWeapon.range)
-            : Physics.RaycastAll(ray, _currentWeapon.range, shootableMask);
+        // Luôn RaycastAll không mask — mask trong Inspector thường thiếu Player layer.
+        // Việc lọc player vs wall dựa vào PlayerHealth component, không dựa vào layer.
+        RaycastHit[] hits = Physics.RaycastAll(ray, range);
+        if (hits == null || hits.Length == 0) { Debug.Log("[WC] Raycast hit nothing (0 results)."); return; }
 
-        if (hits == null || hits.Length == 0) return;
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
         foreach (var hit in hits)
@@ -270,7 +279,22 @@ public class WeaponController : NetworkBehaviour
                 continue;
             }
 
-            var health = hit.collider.GetComponentInParent<PlayerHealth>(true); // true = include inactive
+            // Reverse lookup: duyệt toàn bộ PlayerHealth trong scene,
+            // kiểm tra hit collider có nằm trong hierarchy của player đó không.
+            // Tránh mọi vấn đề prefab structure / NetworkObject caching.
+            PlayerHealth health = null;
+            Transform hitT = hit.collider.transform;
+            foreach (var ph in FindObjectsByType<PlayerHealth>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (ph.Object == null || !ph.Object.IsValid) continue;
+                if (ph.Object.InputAuthority == Object.InputAuthority) continue; // skip chính mình
+                Transform phRoot = ph.Object.transform; // NetworkObject root của player
+                if (hitT == phRoot || hitT.IsChildOf(phRoot))
+                {
+                    health = ph;
+                    break;
+                }
+            }
 
             if (health == null)
             {
@@ -279,18 +303,10 @@ public class WeaponController : NetworkBehaviour
                 break;
             }
 
-            // Bỏ qua nếu cùng InputAuthority (safety net kép cho trường hợp hierarchy lạ)
-            if (health.Object != null && health.Object.InputAuthority == Object.InputAuthority)
-            {
-                Debug.Log($"[WC] Skip same-authority: {hit.collider.gameObject.name}");
-                continue;
-            }
-
             // ── Chạm player hợp lệ ────────────────────────────────────────────────
             bool isHeadshot = hit.collider.CompareTag("Head");
-            int  dmg        = isHeadshot
-                ? _currentWeapon.damage * _currentWeapon.headshotMultiplier
-                : _currentWeapon.damage;
+            int  hsMulti    = (_currentWeapon.headshotMultiplier > 0) ? _currentWeapon.headshotMultiplier : 2;
+            int  dmg        = isHeadshot ? damage * hsMulti : damage;
 
             Debug.DrawLine(ray.origin, hit.point, Color.red, 1f);
             Debug.Log($"[WC] Hit enemy: {hit.collider.gameObject.name} | dmg={dmg} headshot={isHeadshot}");

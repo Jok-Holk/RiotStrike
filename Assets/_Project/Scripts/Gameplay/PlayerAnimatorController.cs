@@ -68,6 +68,16 @@ public class PlayerAnimatorController : MonoBehaviour
     public void TriggerHit()   => _animator?.SetTrigger("Hit");
     public void TriggerDeath() => _animator?.SetTrigger("Death");
 
+    public void TriggerRespawn()
+    {
+        if (_animator == null) return;
+        _animator.ResetTrigger("Death");
+        // CrossFade về "Stand" trên Base Layer (layer 0) — thoát khỏi Death state
+        _animator.CrossFade("Stand", 0.15f, 0);
+        // Force weapon idle update trên WeaponLayer ở frame tiếp theo
+        _appliedWeaponType = -1;
+    }
+
     public void TriggerFire()
     {
         _animator?.SetTrigger("Fire");

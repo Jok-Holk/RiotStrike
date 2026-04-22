@@ -16,23 +16,27 @@ public class TimerManager : NetworkBehaviour
     public float pistolOnlyDuration = 120f;
 
     private bool _initialized = false;
+    private bool _timingSet   = false; // true khi SetTimings() đã được gọi
 
     public bool IsTimeUp() => _networkTime <= 0f;
     public float GetRemainingTime() => Mathf.Max(0f, _networkTime); // dùng cho ScoreboardUI
 
     public override void Spawned()
     {
-        if (Object.HasStateAuthority)
+        if (Object.HasStateAuthority && !_timingSet)
         {
-            // Đọc từ GameConfig (lưu trước khi load scene) thay vì dùng Inspector default (600s).
-            // Tránh trường hợp timer hiện 10:00 rồi nhảy về 3:00 khi GameManager apply config sau.
+            // SetTimings() chưa được gọi → tự khởi tạo từ GameConfig
             float configRound  = GameConfig.RoundTime  > 0 ? GameConfig.RoundTime  : totalTime;
             float configPistol = GameConfig.PistolTime > 0 ? GameConfig.PistolTime : pistolOnlyDuration;
-            totalTime           = configRound;
-            pistolOnlyDuration  = configPistol;
-            _networkTime        = configRound;
-            _rifleUnlocked      = false;
-            Debug.Log($"[TimerManager] Spawned: networkTime={_networkTime}s pistolOnly={pistolOnlyDuration}s (from GameConfig)");
+            totalTime          = configRound;
+            pistolOnlyDuration = configPistol;
+            _networkTime       = configRound;
+            _rifleUnlocked     = false;
+            Debug.Log($"[TimerManager] Spawned (no SetTimings): networkTime={_networkTime}s");
+        }
+        else if (Object.HasStateAuthority)
+        {
+            Debug.Log($"[TimerManager] Spawned: giữ nguyên SetTimings = {_networkTime}s");
         }
         _initialized = true;
     }
@@ -58,25 +62,41 @@ public class TimerManager : NetworkBehaviour
     public override void Render()
     {
         if (!_initialized) return;
+        // Auto-find refs nếu Inspector reference bị mất sau merge
+        // Chỉ tìm trong cùng Canvas để không nhầm với WaitCountdownUI hay panel khác
+        if (timerText == null || phaseText == null) FindTextRefs();
         UpdateUI();
+    }
+
+    void FindTextRefs()
+    {
+        // Chỉ tìm trong ACTIVE objects — tránh lấy nhầm Text từ Canvas_HUD bị ẩn của player khác
+        foreach (var tmp in FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+        {
+            string n = tmp.gameObject.name;
+            if (timerText == null && (n == "Text_Timer" || n == "TimerText" || n == "Timer" || n.Contains("_Timer")))
+                timerText = tmp;
+            if (phaseText == null && (n == "Text_Phase" || n == "PhaseText" || n == "Phase" || n.Contains("_Phase")))
+                phaseText = tmp;
+            if (timerText != null && phaseText != null) break;
+        }
+        if (timerText != null) Debug.Log($"[Timer] Found timerText: {timerText.gameObject.name}");
+        else Debug.LogWarning("[Timer] timerText NOT found. TMP objects in scene: " +
+            string.Join(", ", System.Array.ConvertAll(
+                FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include, FindObjectsSortMode.None),
+                t => t.gameObject.name)));
+        if (phaseText != null) Debug.Log($"[Timer] Found phaseText: {phaseText.gameObject.name}");
     }
 
     void UpdateUI()
     {
-        // Phase 1: SafeZone countdown → hiện đếm ngược WaitTime
-        if (SafeZoneManager.instance != null && !SafeZoneManager.instance.GameStarted)
+        bool waitPhase = SafeZoneManager.instance != null && !SafeZoneManager.instance.GameStarted;
+
+        // Phase 1: SafeZone countdown → WaitCountdownUI tự xử lý, TimerManager ẩn UI
+        if (waitPhase)
         {
-            float waitLeft = SafeZoneManager.instance.GetCountdown();
-            if (timerText)
-            {
-                timerText.text  = Mathf.CeilToInt(waitLeft).ToString();
-                timerText.color = Color.white;
-            }
-            if (phaseText)
-            {
-                phaseText.text  = "CHUẨN BỊ...";
-                phaseText.color = Color.white;
-            }
+            if (timerText) timerText.text = "";
+            if (phaseText) phaseText.text = "";
             return;
         }
 
@@ -115,10 +135,11 @@ public class TimerManager : NetworkBehaviour
     public void SetTimings(float roundTime, float pistolTime)
     {
         if (!Object.HasStateAuthority) return;
-        totalTime = roundTime;
+        _timingSet         = true;
+        totalTime          = roundTime;
         pistolOnlyDuration = pistolTime;
-        _networkTime = roundTime;
-        _rifleUnlocked = false;
+        _networkTime       = roundTime;
+        _rifleUnlocked     = false;
         Debug.Log($"[TimerManager] SetTimings: round={roundTime}s pistol={pistolTime}s");
     }
 }

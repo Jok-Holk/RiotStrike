@@ -168,10 +168,11 @@ public class FPSController : NetworkBehaviour
         Debug.Log($"[FPS] TriggerDeath — IsDead=true on {gameObject.name}");
     }
 
-    /// Gọi qua RPC_OnRespawned → chạy trên mọi client. Mở khóa movement.
+    /// Gọi qua RPC_OnRespawned → chạy trên mọi client. Mở khóa movement + reset animation về Stand.
     public void TriggerRespawn()
     {
         IsDead = false;
+        GetComponent<PlayerAnimatorController>()?.TriggerRespawn();
         Debug.Log($"[FPS] TriggerRespawn — IsDead=false on {gameObject.name}");
     }
 }

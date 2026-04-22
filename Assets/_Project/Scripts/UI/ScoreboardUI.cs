@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Fusion;
 
 /// <summary>
@@ -42,8 +43,8 @@ public class ScoreboardUI : MonoBehaviour
         // === DIAGNOSTIC LOG — xóa sau khi debug xong ===
         Debug.Log($"[ScoreboardUI] Refresh() | teamAContent={teamAContent?.name ?? "NULL"} teamBContent={teamBContent?.name ?? "NULL"} rowPrefab={playerRowPrefab?.name ?? "NULL"} RoomData={RoomPlayerData.instance != null}");
 
-        if (teamAContent) foreach (Transform c in teamAContent) Destroy(c.gameObject);
-        if (teamBContent) foreach (Transform c in teamBContent) Destroy(c.gameObject);
+        if (teamAContent) { foreach (Transform c in teamAContent) Destroy(c.gameObject); EnsureListLayout(teamAContent); }
+        if (teamBContent) { foreach (Transform c in teamBContent) Destroy(c.gameObject); EnsureListLayout(teamBContent); }
 
         // Score
         if (GameManager.instance != null)
@@ -122,6 +123,30 @@ public class ScoreboardUI : MonoBehaviour
         }
 
         Debug.Log($"[ScoreboardUI] Hiển thị {slotCount} người chơi.");
+    }
+
+    /// Đảm bảo container có VerticalLayoutGroup + ContentSizeFitter để rows không đè nhau
+    static void EnsureListLayout(Transform container)
+    {
+        var vlg = container.GetComponent<VerticalLayoutGroup>();
+        if (vlg == null)
+        {
+            vlg = container.gameObject.AddComponent<VerticalLayoutGroup>();
+            vlg.childControlHeight  = false;
+            vlg.childControlWidth   = false;
+            vlg.childForceExpandHeight = false;
+            vlg.childForceExpandWidth  = true;
+            vlg.spacing = 4f;
+            vlg.padding = new RectOffset(4, 4, 4, 4);
+        }
+
+        var csf = container.GetComponent<ContentSizeFitter>();
+        if (csf == null)
+        {
+            csf = container.gameObject.AddComponent<ContentSizeFitter>();
+            csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        }
     }
 
     // Helpers

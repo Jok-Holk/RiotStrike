@@ -77,7 +77,7 @@ public class EndRoundUI : MonoBehaviour
         }
 
         if (scoreText)
-            scoreText.text = $"Xanh  {scoreA}  —  {scoreB}  Đỏ";
+            scoreText.text = $"Xanh  {scoreA}\nĐỏ  {scoreB}";
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;

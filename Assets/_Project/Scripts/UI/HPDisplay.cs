@@ -15,6 +15,8 @@ public class HPDisplay : MonoBehaviour
         // Chỉ update UI cho chính người chơi có InputAuthority
         if (!health.Object.HasInputAuthority) return;
 
+        Debug.Log($"[HPDisplay] UpdateHP hp={health.Health} hpText={hpText != null} hpSlider={hpSlider != null}");
+
         if (hpText)   hpText.text = health.Health.ToString();
         if (hpSlider) hpSlider.value = health.Health / 100f;
     }
